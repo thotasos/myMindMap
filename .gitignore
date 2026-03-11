@@ -1,0 +1,87 @@
+# Xcode
+.DS_Store
+build/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+*.xcworkspace/contents.xcworkspacedata
+*.xcuserdatad
+
+# XcodeGen
+project.yml
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.xcodeproj/project.xcworkspace/xcshareddata/
+
+# Swift Package Manager
+.swiftpm/
+Packages/
+Package.resolved
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+Carthage/Build/
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Build products
+*.app
+*.dylib
+*.framework
+*.swiftmodule
+*.dSYM.zip
+*.dSYM/
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+*~
+
+# Testing
+*.xcresult
+test_output/
+Coverage/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Code signing
+*.p12
+*.mobileprovision
+!ProjectSigning.p12
+!ProjectSigning.mobileprovision
+
+# Secrets (do not commit)
+.env
+Secrets/
+credentials.json
+
+# App specific
+myMindMap/Data/
+*.mindmap
+*.sqlite
+*.db
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Thumbs.db
+Thumbs.db

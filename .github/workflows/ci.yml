@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+
+jobs:
+  build:
+    name: Build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Cache XcodeGen
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: ${{ runner.os }}-xcodegen
+
+      - name: Install XcodeGen
+        if: steps.cache-xcodegen.outputs.cache-hit != 'true'
+        run: |
+          brew install xcodegen || brew upgrade xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve Swift Package dependencies
+        run: xcodebuild -project myMindMap.xcodeproj -scheme myMindMap -configuration Debug -resolvePackageDependencies
+
+      - name: Build
+        run: xcodebuild -project myMindMap.xcodeproj -scheme myMindMap -configuration Debug build
+
+  test:
+    name: Test
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen || brew upgrade xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve Swift Package dependencies
+        run: xcodebuild -project myMindMap.xcodeproj -scheme myMindMap -configuration Debug -resolvePackageDependencies
+
+      - name: Test
+        run: xcodebuild -project myMindMap.xcodeproj -scheme myMindMap -configuration Debug test
+
+  analyze:
+    name: Analyze
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen || brew upgrade xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve Swift Package dependencies
+        run: xcodebuild -project myMindMap.xcodeproj -scheme myMindMap -configuration Debug -resolvePackageDependencies
+
+      - name: Analyze
+        run: xcodebuild -project myMindMap.xcodeproj -scheme myMindMap -configuration Debug analyze
+
+  lint:
+    name: Lint
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint || brew upgrade swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint
+
+  archive:
+    name: Archive
+    runs-on: macos-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    needs: [build, test, analyze]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Install XcodeGen
+        run: brew install xcodegen || brew upgrade xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Import Certificate
+        env:
+          CERTIFICATE: ${{ secrets.CERTIFICATE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          echo -n "$CERTIFICATE" | base64 --decode -o certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import certificate.p12 -P "" -A -t cert -f pkcs12 -k build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" build.keychain
+
+      - name: Provisioning Profile
+        env:
+          PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
+        run: |
+          echo -n "$PROVISIONING_PROFILE" | base64 --decode -o provisioning.mobileprovision
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp provisioning.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Build for Archive
+        env:
+          CODE_SIGN_IDENTITY: ${{ secrets.CODE_SIGN_IDENTITY }}
+          CODE_SIGNING_REQUIRED: "NO"
+          CODE_SIGNING_ALLOWED: "NO"
+        run: |
+          xcodebuild -project myMindMap.xcodeproj -scheme myMindMap -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO clean archive
+
+      - name: Upload Archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: myMindMap-archive
+          path: build/Build/Products/Release/*.xcarchive
+
+  format:
+    name: Format Check
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SwiftFormat
+        run: brew install swiftformat || brew upgrade swiftformat
+
+      - name: Check Formatting
+        run: swiftformat --dryrun --strict .

@@ -1,0 +1,33 @@
+--swiftversion 5.9
+
+# Formatting rules
+--indent 4
+--indentcase false
+--trimwhitespace always
+--nospaceoperators ..<,...
+--ranges spaced
+--empty void
+--commas always
+--semicolons never
+--patternlet inline
+--elseposition same-line
+--wrapcollections before-first
+--wraparguments before-first
+--wrapparameters before-first
+--wrapinchecks before-first
+--wrapcomplexity before-first
+
+# Enabled rules
+--enable isEmpty
+--enable redundantSelf
+--enable sortedImports
+--enable strongifiedSelf
+--enable trailingCommas
+
+# Excluded paths
+--exclude .build
+--exclude build
+--exclude Pods
+--exclude Carthage
+--exclude DerivedData
+--exclude .swiftpm
