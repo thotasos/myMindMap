@@ -1,0 +1,22 @@
+{
+  "gate_id": 1,
+  "phase": "SPEC_AND_ARCHITECTURE",
+  "status": "PASS",
+  "closed_by": "lead_architect + ux_engineer + qa_agent",
+  "closed_at": "2026-03-23T00:00:00Z",
+  "spec_hash": "8b5676a22bfc87c062a8a0924329d7b90b603d24b7753eca35ef3fe604feb220",
+  "architecture_hash": "6c0ff6ff67918bc11f8fc8d39a697c624dc456c294d977269008fed500970af4",
+  "constraints_baseline_hash": "41569432b368b40d38afa182f748bb16b5f58787bf2a0bf5e538b4d746292284",
+  "constraints_gate1_hash": "41569432b368b40d38afa182f748bb16b5f58787bf2a0bf5e538b4d746292284",
+  "requirements_count": 49,
+  "test_cases_count": 49,
+  "shortcuts_count": 57,
+  "architecture_sections_complete": 8,
+  "blockers_resolved": ["BLOCKER-001", "BLOCKER-002", "BLOCKER-003", "BLOCKER-004", "BLOCKER-005"],
+  "blockers_remaining": ["BLOCKER-006", "BLOCKER-007", "BLOCKER-008", "BLOCKER-009", "BLOCKER-010", "BLOCKER-011", "BLOCKER-012"],
+  "signatures": {
+    "lead_architect": "confirmed",
+    "ux_engineer": "confirmed",
+    "qa_agent": "confirmed"
+  }
+}

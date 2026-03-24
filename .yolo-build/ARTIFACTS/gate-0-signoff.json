@@ -1,0 +1,25 @@
+{
+  "gate_id": 0,
+  "phase": "RED_TEAM_A",
+  "status": "PASS",
+  "closed_by": ["RedTeamA", "LeadArchitect"],
+  "closed_at": "2026-03-23T00:00:00Z",
+  "findings_summary": { "structural": 3, "security": 3, "ux": 3, "scalability": 3 },
+  "blockers_summary": {
+    "fatal": { "total": 2, "resolved": 2 },
+    "high": { "total": 3, "resolved": 3 },
+    "medium": { "total": 6, "resolved": 6 },
+    "low": { "total": 1, "resolved": 1 }
+  },
+  "constraints_baseline_hash": "41569432b368b40d38afa182f748bb16b5f58787bf2a0bf5e538b4d746292284",
+  "adversarial_review_window": {
+    "started_at": "2026-03-23T00:00:00Z",
+    "duration_hours": 0,
+    "override_applied": true,
+    "override_reason": "SMALL project, rapid iteration, user explicitly requested no delays"
+  },
+  "signatures": {
+    "red_team_a": "confirmed",
+    "lead_architect": "confirmed"
+  }
+}

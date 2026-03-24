@@ -10,7 +10,7 @@ struct MyMindMapApp: App {
         .modelContainer(for: [
             MindMap.self,
             MindMapNode.self,
-            NodeConnection.self,
+            MindMapConnection.self,
             Theme.self
         ])
         .windowStyle(.automatic)
@@ -22,10 +22,13 @@ struct MyMindMapApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+
+            CommandGroup(after: .help) {
+                Button("Keyboard Shortcuts") {
+                    NotificationCenter.default.post(name: .showShortcuts, object: nil)
+                }
+                .keyboardShortcut("?", modifiers: .command)
+            }
         }
     }
-}
-
-extension Notification.Name {
-    static let createNewMindMap = Notification.Name("createNewMindMap")
 }

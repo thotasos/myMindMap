@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "Architecture Pattern Selection: MVVM with SwiftData",
+      "chosen": "MVVM + SwiftData",
+      "rationale": "SwiftUI pairs naturally with @Observable ViewModels. SwiftData for persistence provides native Apple framework with automatic CloudKit sync potential. Document-based app (NSDocument) gives open/save/save-as for free. Mind map state (selected node, expand/collapse, canvas transform) lives in MindMapViewModel (@Observable, @MainActor isolated). Node-specific state in NodeViewModel.",
+      "alternatives_considered": [
+        {
+          "name": "MVC with Core Data",
+          "description": "Traditional MVC with NSController subclasses and Core Data",
+          "rejectedReason": "Core Data is heavier, SwiftData is the modern Apple recommendation for new macOS apps"
+        },
+        {
+          "name": "VIPER",
+          "description": "VIPER modules with separate Interactor/Presenter/View/Entity/Router",
+          "rejectedReason": "Overkill for a mind map app with ~10 screens. High ceremony, low productivity."
+        },
+        {
+          "name": "Flux/Redux",
+          "description": "Unidirectional data flow with single store",
+          "rejectedReason": "SwiftUI's @State/@Binding makes two-way binding natural. Redux adds boilerplate without benefit here."
+        }
+      ],
+      "tradeoffs": "SwiftData is relatively new (2023) and less battle-tested than Core Data. Repository pattern (MindMapRepository protocol) provides abstraction for potential future migration.",
+      "created_at": "2026-03-23T00:00:00Z",
+      "created_by": "lead_architect",
+      "version": 1,
+      "status": "ACTIVE",
+      "superseded_by": null,
+      "superseded_by_phase": null,
+      "conflict_resolution_id": null,
+      "binding": "hard",
+      "bindingReason": "Architecture decision, enforced through code review",
+      "implementationNotes": "MindMapViewModel.swift, MindMapDocument.swift, MindMapRepository.swift",
+      "gateAtCreation": 1,
+      "validatedByDriftCheck": false
+    },
+    {
+      "id": "DEC-002",
+      "title": "Canvas Rendering: Viewport Culling with Spatial Index",
+      "chosen": "Viewport culling + R-tree spatial index",
+      "rationale": "Mind map with 10,000+ nodes requires O(log n) visibility queries. R-tree provides excellent performance for 2D spatial queries. Only nodes intersecting visibleRect are rendered as SwiftUI views. Off-screen nodes show placeholder dots. Connections culled when both endpoints off-screen.",
+      "alternatives_considered": [
+        {
+          "name": "LazyVGrid/LazyHStack",
+          "description": "Apple's built-in lazy containers",
+          "rejectedReason": "These handle only linear layouts, not the 2D spatial layout of a mind map canvas"
+        },
+        {
+          "name": "No culling (render all)",
+          "description": "Simply render all nodes regardless of visibility",
+          "rejectedReason": "FATAL: O(n) render at 10k nodes makes app unusable. BLOCKER-002."
+        },
+        {
+          "name": "Quadtree",
+          "description": "Simple 2D spatial partitioning",
+          "rejectedReason": "R-tree has better average performance for variable-density spatial data typical in mind maps"
+        }
+      ],
+      "tradeoffs": "R-tree requires additional library (swift-collections RTree or custom). Implementation adds complexity but is necessary for scale.",
+      "created_at": "2026-03-23T00:00:00Z",
+      "created_by": "lead_architect",
+      "version": 1,
+      "status": "ACTIVE",
+      "superseded_by": null,
+      "superseded_by_phase": null,
+      "conflict_resolution_id": null,
+      "binding": "hard",
+      "bindingReason": "Performance requirement from BLOCKER-002 (FATAL), enforced through load testing",
+      "implementationNotes": "SpatialIndex.swift (R-tree), CanvasView.swift (viewport queries), NodesLayerView.swift (culling)",
+      "gateAtCreation": 1,
+      "validatedByDriftCheck": false
+    },
+    {
+      "id": "DEC-003",
+      "title": "File Persistence: Atomic Writes with Backup",
+      "chosen": "Atomic write pattern + automatic backup",
+      "rationale": "SwiftData ModelContext.save() with try? silently fails. BLOCKER-001 (FATAL): data loss on crash. Solution: write to temp location, verify, rename to final location. Before every save, copy current to .backup directory with timestamp. On launch, check store integrity.",
+      "alternatives_considered": [
+        {
+          "name": "SQLite WAL mode",
+          "description": "Write-Ahead Logging for atomic transactions",
+          "rejectedReason": "SwiftData doesn't expose low-level SQLite configuration. Not directly controllable."
+        },
+        {
+          "name": "NSDocument automatic versioning",
+          "description": "Use NSDocument's built-in versioning",
+          "rejectedReason": "Designed for conflict resolution in multi-user scenarios, not crash recovery. Doesn't protect against mid-write corruption."
+        }
+      ],
+      "tradeoffs": "Backup directory can grow large over time. Need cleanup policy (keep last 5 backups per document).",
+      "created_at": "2026-03-23T00:00:00Z",
+      "created_by": "lead_architect",
+      "version": 1,
+      "status": "ACTIVE",
+      "superseded_by": null,
+      "superseded_by_phase": null,
+      "conflict_resolution_id": null,
+      "binding": "hard",
+      "bindingReason": "Data safety requirement from BLOCKER-001 (FATAL), enforced through crash simulation testing",
+      "implementationNotes": "MindMapDocument.swift (atomic save), BackupManager.swift, CorruptionRecoveryView.swift",
+      "gateAtCreation": 1,
+      "validatedByDriftCheck": false
+    },
+    {
+      "id": "DEC-004",
+      "title": "Thread Safety: MainActor Isolation",
+      "chosen": "@MainActor on all SwiftData operations",
+      "rationale": "SwiftData ModelContext is not thread-safe. BLOCKER-005 (HIGH): concurrent access causes CrossActorViolation. Solution: ALL ModelContext operations (save, fetch, insert, delete) run on @MainActor. Auto-save timer uses Task { @MainActor in } for main thread dispatch. MindMapViewModel is @MainActor isolated.",
+      "alternatives_considered": [
+        {
+          "name": "Actor-isolated ModelContext",
+          "description": "Create isolated actor wrapping ModelContext",
+          "rejectedReason": "SwiftData ModelContext is already @MainActor constrained by Apple. Adding another layer adds complexity without benefit."
+        },
+        {
+          "name": "Serialize all context access via serial queue",
+          "description": "DispatchQueue.serial for all SwiftData operations",
+          "rejectedReason": "Works but less idiomatic than @MainActor. Doesn't integrate with SwiftUI's @State/@StateObject."
+        }
+      ],
+      "tradeoffs": "All SwiftData work on main thread could cause jank during large saves. Mitigation: batch saves, background pre-processing of node data.",
+      "created_at": "2026-03-23T00:00:00Z",
+      "created_by": "lead_architect",
+      "version": 1,
+      "status": "ACTIVE",
+      "superseded_by": null,
+      "superseded_by_phase": null,
+      "conflict_resolution_id": null,
+      "binding": "hard",
+      "bindingReason": "Concurrency safety from BLOCKER-005 (HIGH), enforced through -XactorIsolatedChecksStrict testing",
+      "implementationNotes": "MindMapViewModel.swift (@MainActor), MindMapDocument.swift (auto-save on MainActor)",
+      "gateAtCreation": 1,
+      "validatedByDriftCheck": false
+    }
+  ],
+  "next_decision_id": 5
+}

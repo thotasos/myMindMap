@@ -2,6 +2,7 @@ import XCTest
 import SwiftUI
 @testable import myMindMap
 
+@MainActor
 final class KeyboardViewModelTests: XCTestCase {
 
     var viewModel: KeyboardViewModel!

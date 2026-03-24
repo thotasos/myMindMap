@@ -3,6 +3,7 @@ import SwiftUI
 import SwiftData
 @testable import myMindMap
 
+@MainActor
 final class MindMapViewModelTests: XCTestCase {
 
     var viewModel: MindMapViewModel!
@@ -13,7 +14,7 @@ final class MindMapViewModelTests: XCTestCase {
         viewModel = MindMapViewModel()
 
         // Setup SwiftData container for testing
-        let schema = Schema([MindMap.self, MindMapNode.self, NodeConnection.self, Theme.self])
+        let schema = Schema([MindMap.self, MindMapNode.self, MindMapConnection.self, Theme.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try? ModelContainer(for: schema, configurations: config)
         if let container = modelContainer {
@@ -48,7 +49,7 @@ final class MindMapViewModelTests: XCTestCase {
 
         XCTAssertNotNil(viewModel.currentMindMap)
         XCTAssertTrue(viewModel.isDirty)
-        XCTAssertEqual(viewModel.currentMindMap?.title, "Untitled Mind Map")
+        XCTAssertEqual(viewModel.currentMindMap?.title, "Untitled")
     }
 
     func testCreateNewMindMapAddsRootNode() throws {
@@ -61,7 +62,7 @@ final class MindMapViewModelTests: XCTestCase {
 
         let nodes = viewModel.currentMindMap?.nodes ?? []
         XCTAssertEqual(nodes.count, 1)
-        XCTAssertEqual(nodes.first?.text, "Central Idea")
+        XCTAssertEqual(nodes.first?.title, "Central Idea")
     }
 
     func testCreateNewMindMapSetsRootNodePosition() throws {
@@ -100,12 +101,12 @@ final class MindMapViewModelTests: XCTestCase {
         }
 
         viewModel.createNewMindMap()
-        let originalModifiedAt = viewModel.currentMindMap?.modifiedAt
+        let originalModifiedAt = viewModel.currentMindMap?.updatedAt
 
         Thread.sleep(forTimeInterval: 0.01)
         viewModel.saveMindMap()
 
-        XCTAssertGreaterThan(viewModel.currentMindMap?.modifiedAt ?? Date.distantPast, originalModifiedAt ?? Date.distantPast)
+        XCTAssertGreaterThan(viewModel.currentMindMap?.updatedAt ?? Date.distantPast, originalModifiedAt ?? Date.distantPast)
     }
 
     func testSaveMindMapWithNoCurrentMap() throws {
@@ -173,8 +174,8 @@ final class MindMapViewModelTests: XCTestCase {
         // Most recently modified should be first
         if viewModel.recentMindMaps.count >= 2 {
             XCTAssertGreaterThanOrEqual(
-                viewModel.recentMindMaps[0].modifiedAt,
-                viewModel.recentMindMaps[1].modifiedAt
+                viewModel.recentMindMaps[0].updatedAt,
+                viewModel.recentMindMaps[1].updatedAt
             )
         }
     }
@@ -234,7 +235,7 @@ final class MindMapViewModelTests: XCTestCase {
     // MARK: - Model Context Tests
 
     func testSetModelContext() throws {
-        let schema = Schema([MindMap.self, MindMapNode.self, NodeConnection.self, Theme.self])
+        let schema = Schema([MindMap.self, MindMapNode.self, MindMapConnection.self, Theme.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: config)
         let newContext = ModelContext(container)

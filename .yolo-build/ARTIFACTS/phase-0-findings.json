@@ -1,0 +1,101 @@
+{
+  "findings_count": 12,
+  "findings": [
+    {
+      "vector_id": "SA-1",
+      "category": "structural",
+      "finding": "Keyboard navigation coherence degrades with depth and collapsed nodes. Arrow key navigation (up=parent, down=first child, left/right=siblings) has no visual breadcrumb trail, no depth indicator, and collapsed nodes silently skip entire subtrees. No navigation history or path recall exists.",
+      "attack_scenario": "User collapses a branch with 50 nodes, then uses arrow keys to navigate. The navigation silently skips the entire subtree with no indication. User believes they are at a sibling when they are at a distant cousin. User performs bulk operation on wrong subtree believing they are in a different context.",
+      "severity": "HIGH",
+      "resolution": "Implement: (1) Breadcrumb trail showing path from root to current node in status bar, (2) Audible/haptic feedback on navigation across collapsed boundaries, (3) Navigation history with back-button support (Cmd+[), (4) Visual connection highlight showing parent chain during navigation."
+    },
+    {
+      "vector_id": "SA-2",
+      "category": "structural",
+      "finding": "Data persistence uses SwiftData ModelContext.save() with silent try? failure. No atomic write pattern, no backup files, no corruption detection. If crash occurs mid-save or disk is full, SwiftData may leave the store in a partially written state with no recovery mechanism.",
+      "attack_scenario": "User is editing a complex mind map with 500 nodes. System crash occurs during auto-save. User relaunches app to find SwiftData store corrupted or partially written. All 500 nodes are lost with no backup and no error message displayed.",
+      "severity": "FATAL",
+      "resolution": "Implement: (1) Atomic write pattern with write-ahead log, (2) Automatic backup before save using FileManager.copyItem, (3) SwiftData store integrity check on launch, (4) Recovery UI showing 'Found corrupted save, restoring from backup', (5) Explicit save error propagation (not try?)."
+    },
+    {
+      "vector_id": "SA-3",
+      "category": "structural",
+      "finding": "No third-party dependencies visible in codebase. The app relies solely on Apple frameworks (SwiftData, SwiftUI, AppKit). However, no dependency isolation layer exists, and the SwiftData API surface is large. If Apple deprecates SwiftData or changes its behavior, migration cost is unknown.",
+      "attack_scenario": "Apple announces SwiftData deprecation or introduces breaking API changes in next macOS version. The codebase has no abstraction layer over SwiftData, requiring complete rewrite of persistence layer. No migration path exists.",
+      "severity": "MEDIUM",
+      "resolution": "Implement: (1) Repository pattern abstraction over SwiftData (protocol MindMapRepository), (2) SwiftData implementation (MindMapRepositoryImpl), (3) Dependency injection via Environment, (4) Alternative persistence strategy documented (SQLite.swift, etc.), (5) Migration test suite."
+    },
+    {
+      "vector_id": "SE-1",
+      "category": "security",
+      "finding": "Data stored via SwiftData at ~/Library/Application Support/myMindMap/. No sandboxing, no encryption, no access control. The default SwiftData container has world-readable permissions on macOS. Any local user or malware can read the mind map content.",
+      "attack_scenario": "Malware running with current user privileges reads ~/Library/Application Support/myMindMap/ and extracts all mind map content including sensitive business data, personal notes, and intellectual property mapped in user's mind maps.",
+      "severity": "HIGH",
+      "resolution": "Implement: (1) Enable App Sandbox with com.apple.security.files.user-selected.read-write entitlement, (2) Use NSFileProtectionComplete on SwiftData store, (3) Document expected file permissions (should be 700), (4) Add Data Protection entitlement, (5) Consider encrypting sensitive fields at rest."
+    },
+    {
+      "vector_id": "SE-2",
+      "category": "security",
+      "finding": "No network calls currently implemented. However, export menu items (JSON, Markdown, PNG) are stub implementations with no network code. Attack surface is minimal but future network features could be vulnerable.",
+      "attack_scenario": "Developer adds cloud sync feature in future version. No certificate pinning, no API authentication, no request signing. Attacker performs man-in-the-middle to inject malicious content into sync stream, corrupting user's mind maps.",
+      "severity": "LOW",
+      "resolution": "Document that network features are prohibited until security review. If network features are added: (1) Implement TLS certificate pinning, (2) Use OAuth 2.0 for authentication, (3) Add request signing with HMAC, (4) Validate all server responses schema, (5) Add network security config."
+    },
+    {
+      "vector_id": "SE-3",
+      "category": "security",
+      "finding": "User input in node text is stored directly without sanitization. TextField binds directly to node.text. No length limits, no character filtering, no output encoding on render. While SwiftUI Text escapes content, exported files (future JSON/Markdown) could contain injection payloads.",
+      "attack_scenario": "User creates node with text: '<script>alert(1)</script>' then exports to JSON. Another user imports this JSON. If the importer's app renders this in WebView or processes it without sanitization, XSS occurs. Additionally, extremely long node text (100KB) could cause memory exhaustion.",
+      "severity": "MEDIUM",
+      "resolution": "Implement: (1) Max node text length of 10,000 characters enforced at NodeViewModel, (2) Sanitize HTML/script content in node text before export, (3) Add input validation enum for allowed characters, (4) Escape all output in export formats, (5) Test with payloads: '<script>', '\\x00', unicode bidi characters."
+    },
+    {
+      "vector_id": "UX-1",
+      "category": "ux",
+      "finding": "Keyboard shortcuts are incomplete. Missing shortcuts for: node color/theme changes, collapse all (Cmd+Shift+C), expand all (Cmd+Shift+E), zoom to 100% (Cmd+1), reset canvas position, copy (Cmd+C), paste (Cmd+V), cut (Cmd+X), select all (Cmd+A). Actions without shortcuts require mouse/trackpad.",
+      "attack_scenario": "Power user wants to rapidly restructure a large mind map with 200 nodes. They must reach for mouse to change node colors, cannot collapse all nodes with keyboard, cannot select all nodes to move them together. Productivity grinds to halt.",
+      "severity": "MEDIUM",
+      "resolution": "Implement missing shortcuts: Cmd+1 (zoom 100%), Cmd+Shift+C (collapse all), Cmd+Shift+E (expand all), Cmd+Shift+0 (reset view), Cmd+A (select all), Cmd+C/X/V (copy/cut/paste nodes), Cmd+L (toggle grid). Document all shortcuts in Help menu."
+    },
+    {
+      "vector_id": "UX-2",
+      "category": "ux",
+      "finding": "Dark mode transition is static. The Theme model has isDarkMode flag but no automatic macOS appearance following. User must manually switch themes. The app does not respond to NSApp.appearanceDidChange notification. Colors are hardcoded hex values that don't adapt.",
+      "attack_scenario": "User works in evening with macOS configured to automatic dark mode. At 8PM macOS switches to dark mode but myMindMap stays in light mode with harsh white background and black text. User experiences eye strain and must manually toggle theme.",
+      "severity": "MEDIUM",
+      "resolution": "Implement: (1) Observe NSApp.appearanceDidChangeNotification, (2) Auto-switch to defaultDark/defaultLight based on NSApp.effectiveAppearance, (3) Update CanvasBackgroundView, NodeView, ConnectionsLayerView to use dynamic colors via Color(nsColor: .windowBackgroundColor), (4) Animate transition over 300ms."
+    },
+    {
+      "vector_id": "UX-3",
+      "category": "ux",
+      "finding": "Vague acceptance criteria found: 'beautiful mind maps' (undefined aesthetics), 'distraction-free' (undefined), 'auto-sizing font' (no min/max bounds), 'thin italics font' (no pt size), 'colorful thin lines' (no hex values), 'auto-zoom to fit' (no trigger condition, padding, or animation duration), 'central node appears selected' (no visual spec).",
+      "attack_scenario": "Designer implements 'beautiful' with neon colors and animations. Another designer implements 'distraction-free' with muted grays and no animations. User experiences wildly different interpretations. QA cannot verify 'auto-zoom' because no one agreed on what 'fit' means.",
+      "severity": "MEDIUM",
+      "resolution": "Quantify each criterion: (1) 'beautiful' = follow Apple Human Interface Guidelines + brand colors in DESIGN_SYSTEM.md, (2) 'auto-sizing font' = 12pt min, 24pt max, scales with depth (depth 0=24pt, depth 1+=12-18pt based on string length), (3) 'thin italics font' = 10pt SF Pro Italic, (4) 'colorful' = 8 distinct hues from HSB color wheel, (5) 'thin lines' = 1.5pt stroke, (6) 'auto-zoom' = on new/open, 50pt padding, 300ms ease-in-out."
+    },
+    {
+      "vector_id": "SC-1",
+      "category": "scalability",
+      "finding": "No viewport culling implemented. NodesLayerView creates ForEach for all visibleNodes (comment says 'use viewport culling in production'). ConnectionsLayerView draws ALL connections in Canvas. fitToScreen iterates all nodes. At 1000+ nodes: ~1000 SwiftUI views, ~999 connections, severe frame drops. At 10000+ nodes: app likely unusable.",
+      "attack_scenario": "User pastes a large brain dump with 5000 nodes. App becomes completely unresponsive. Every pan/zoom triggers 5000 view updates. User cannot even delete nodes to recover. Must force-quit and edit SQLite store directly to fix.",
+      "severity": "FATAL",
+      "resolution": "Implement: (1) Viewport culling - only create NodeView instances for nodes intersecting visibleRect, (2) Spatial index (R-tree or quadtree) for O(log n) viewport queries, (3) Connection culling - only draw connections where both endpoints visible, (4) Offscreen node placeholder views, (5) Target: 60fps with 10,000 nodes via lazy rendering."
+    },
+    {
+      "vector_id": "SC-2",
+      "category": "scalability",
+      "finding": "No action throttling on Cmd+N. Each keypress posts .createNewMindMap notification synchronously, which triggers createNewMindMap() inserting into context and calling save(). Rapid 50x presses creates 50 MindMap objects, 50 root nodes, all saved immediately. No debounce, no coalescing, no rate limiting.",
+      "attack_scenario": "User holds Cmd+N down accidentally or mashing keyboard during thinking pause. 50+ mind maps created in SwiftData store. User must manually delete them one by one. Each triggers fitToScreen animation. UI freezes briefly during bulk insert. Potential SwiftData lock contention.",
+      "severity": "MEDIUM",
+      "resolution": "Implement: (1) Debounce Cmd+N to max 1 action per 500ms, (2) Coalesce rapid notifications, (3) Add throttled action queue in MindMapViewModel, (4) Show confirmation dialog if creating more than 3 mind maps in 5 seconds: 'Create 47 more?', (5) Limit to max 10 unsaved documents in memory."
+    },
+    {
+      "vector_id": "SC-3",
+      "category": "scalability",
+      "finding": "SwiftData ModelContext is not thread-safe. While ViewModels use @Observable and main actor isolation, the modelContext is stored as non-isolated property and used in save() calls from multiple contexts. No synchronization primitive protects concurrent access. Data races possible during auto-save while user edits.",
+      "attack_scenario": "Auto-save timer fires on background thread while user is actively editing node text on main thread. Both write to same MindMapNode simultaneously. SwiftData throws CrossActorViolation. Data inconsistency between in-memory and persisted state. Possible crash with 'concurrent modification' error.",
+      "severity": "HIGH",
+      "resolution": "Implement: (1) Annotate all SwiftData operations with @MainActor, (2) Use ModelContext only on main actor, (3) Move auto-save to main actor via Task { @MainActor in }, (4) Add actor-isolated wrapper for MindMapViewModel, (5) Test with -XactorIsolatedChecksStrict enabled, (6) Consider serial execution queue for all context operations."
+    }
+  ]
+}

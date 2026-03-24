@@ -4,11 +4,14 @@ import SwiftData
 struct SearchOverlayView: View {
     let mindMap: MindMap?
     @Bindable var canvasViewModel: CanvasViewModel
+    @Bindable var mindMapViewModel: MindMapViewModel
 
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var searchFieldFocused: Bool
 
     @State private var searchText: String = ""
     @State private var searchResults: [MindMapNode] = []
+    @State private var selectedResultIndex: Int = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,6 +24,9 @@ struct SearchOverlayView: View {
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($searchFieldFocused)
+                    .onSubmit {
+                        selectCurrentResult()
+                    }
 
                 if !searchText.isEmpty {
                     Button(action: {
@@ -60,24 +66,51 @@ struct SearchOverlayView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(searchResults, id: \.id) { node in
+                List(searchResults.indices, id: \.self) { index in
+                    let node = searchResults[index]
                     Button(action: {
                         selectNode(node)
                     }) {
                         HStack {
-                            Text(node.text)
-                                .foregroundStyle(.primary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(node.title)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+
+                                if !node.notes.isEmpty {
+                                    Text(node.notes)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
 
                             Spacer()
 
-                            if node.parent == nil {
+                            if node.parentId == nil {
                                 Text("Root")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.blue.opacity(0.2))
+                                    .foregroundStyle(.blue)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
                             }
+
+                            Text("Depth \(node.depth)")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
                         }
+                        .padding(.vertical, 4)
+                        .background(index == selectedResultIndex ? Color.blue.opacity(0.1) : Color.clear)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .onHover { hovering in
+                        if hovering {
+                            selectedResultIndex = index
+                        }
+                    }
                 }
                 .listStyle(.plain)
             }
@@ -90,13 +123,9 @@ struct SearchOverlayView: View {
             performSearch(newValue)
         }
         .onSubmit(of: .text) {
-            if let first = searchResults.first {
-                selectNode(first)
-            }
+            selectCurrentResult()
         }
     }
-
-    @FocusState private var searchFieldFocused: Bool
 
     private func performSearch(_ query: String) {
         guard let mindMap = mindMap, !query.isEmpty else {
@@ -104,13 +133,22 @@ struct SearchOverlayView: View {
             return
         }
 
+        let lowercasedQuery = query.lowercased()
         searchResults = mindMap.nodes.filter { node in
-            node.text.localizedCaseInsensitiveContains(query)
+            node.title.lowercased().contains(lowercasedQuery) ||
+            node.notes.lowercased().contains(lowercasedQuery)
         }
+        selectedResultIndex = 0
     }
 
     private func selectNode(_ node: MindMapNode) {
         canvasViewModel.selectNode(node.id)
+        mindMapViewModel.selectNode(node.id)
         dismiss()
+    }
+
+    private func selectCurrentResult() {
+        guard !searchResults.isEmpty else { return }
+        selectNode(searchResults[selectedResultIndex])
     }
 }

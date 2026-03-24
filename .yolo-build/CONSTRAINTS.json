@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "constraints": [
+    {
+      "id": "CONSTRAINT-001",
+      "binding": "HARD",
+      "category": "architecture",
+      "title": "Atomic file I/O with backup and recovery",
+      "description": "All document saves MUST use atomic write pattern (write to temp + rename) with automatic backup before save. SwiftData store integrity MUST be verified on launch. Corrupted saves MUST trigger recovery UI with backup restoration.",
+      "rationale": "BLOCKER-001 (SA-2 FATAL): Without atomic writes and backups, any crash during save permanently destroys user data. This is non-negotiable for a document-based app.",
+      "source": "red_team",
+      "createdAt": "2026-03-23T00:00:00Z",
+      "validatedAt": null,
+      "violations": []
+    },
+    {
+      "id": "CONSTRAINT-002",
+      "binding": "HARD",
+      "category": "performance",
+      "title": "Viewport culling for 60fps at 10k nodes",
+      "description": "Canvas rendering MUST implement viewport culling — only visible nodes and connections are drawn. Spatial index (R-tree) for O(log n) visibility queries. Target: 60fps with 10,000 nodes on Apple Silicon.",
+      "rationale": "BLOCKER-002 (SC-1 FATAL): Without viewport culling, the app becomes completely unusable at 5000+ nodes. This is a hard performance requirement for any mind map app.",
+      "source": "red_team",
+      "createdAt": "2026-03-23T00:00:00Z",
+      "validatedAt": null,
+      "violations": []
+    },
+    {
+      "id": "CONSTRAINT-003",
+      "binding": "HARD",
+      "category": "security",
+      "title": "App Sandbox and Data Protection",
+      "description": "App MUST be sandboxed with com.apple.security.files.user-selected.read-write. SwiftData store MUST use NSFileProtectionComplete. File permissions MUST be 700. Document-based app using NSDocument requires Security-Scoped Bookmarks for file access.",
+      "rationale": "BLOCKER-004 (SE-1 HIGH): Without sandboxing and encryption, any malware running as the user can read all mind map content. This is required for Mac App Store and basic security.",
+      "source": "red_team",
+      "createdAt": "2026-03-23T00:00:00Z",
+      "validatedAt": null,
+      "violations": []
+    },
+    {
+      "id": "CONSTRAINT-004",
+      "binding": "HARD",
+      "category": "architecture",
+      "title": "Main actor isolation for all SwiftData operations",
+      "description": "ALL SwiftData ModelContext operations MUST run on @MainActor. Auto-save timers, document changes, and user edits MUST be serialized through the main actor. No concurrent SwiftData writes.",
+      "rationale": "BLOCKER-005 (SC-3 HIGH): Without actor isolation, concurrent SwiftData operations cause CrossActorViolation crashes and data corruption.",
+      "source": "red_team",
+      "createdAt": "2026-03-23T00:00:00Z",
+      "validatedAt": null,
+      "violations": []
+    },
+    {
+      "id": "CONSTRAINT-005",
+      "binding": "SOFT",
+      "category": "ux",
+      "title": "Automatic dark mode following macOS",
+      "description": "App SHOULD observe NSApp.appearanceDidChangeNotification and automatically switch themes to match macOS appearance. Transition SHOULD be animated over 300ms.",
+      "rationale": "BLOCKER-009 (UX-2 MEDIUM): Static dark mode that doesn't follow macOS creates poor user experience in evening hours.",
+      "source": "red_team",
+      "createdAt": "2026-03-23T00:00:00Z",
+      "validatedAt": null,
+      "violations": []
+    },
+    {
+      "id": "CONSTRAINT-006",
+      "binding": "SOFT",
+      "category": "ux",
+      "title": "Complete keyboard shortcut coverage",
+      "description": "All user actions SHOULD have keyboard shortcuts. Missing: Cmd+1 (zoom 100%), Cmd+Shift+C/E (collapse/expand all), Cmd+Shift+0 (reset view), Cmd+A (select all), Cmd+C/X/V (copy/cut/paste). Shortcuts window accessible via Cmd+?.",
+      "rationale": "BLOCKER-008 (UX-1 MEDIUM): Power users with large mind maps cannot work efficiently without full keyboard coverage.",
+      "source": "red_team",
+      "createdAt": "2026-03-23T00:00:00Z",
+      "validatedAt": null,
+      "violations": []
+    },
+    {
+      "id": "CONSTRAINT-007",
+      "binding": "SOFT",
+      "category": "security",
+      "title": "Input sanitization and length limits",
+      "description": "Node text input MUST be limited to 10,000 characters. HTML/script content MUST be sanitized before export. Export formats MUST escape all user content.",
+      "rationale": "BLOCKER-007 (SE-3 MEDIUM): Without input limits and sanitization, exports could contain injection payloads and extremely long text could cause memory issues.",
+      "source": "red_team",
+      "createdAt": "2026-03-23T00:00:00Z",
+      "validatedAt": null,
+      "violations": []
+    },
+    {
+      "id": "CONSTRAINT-008",
+      "binding": "SOFT",
+      "category": "performance",
+      "title": "Rapid action debouncing",
+      "description": "Cmd+N SHOULD be debounced to max 1 action per 500ms. Rapid repeated actions SHOULD coalesce. Confirmation dialog if creating more than 3 documents in 5 seconds.",
+      "rationale": "BLOCKER-011 (SC-2 MEDIUM): Without debouncing, accidental key mashing creates dozens of documents and UI freezes.",
+      "source": "red_team",
+      "createdAt": "2026-03-23T00:00:00Z",
+      "validatedAt": null,
+      "violations": []
+    }
+  ],
+  "supersession_log": []
+}

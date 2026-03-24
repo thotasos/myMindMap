@@ -1,0 +1,36 @@
+{
+  "project": "myMindMap",
+  "project_size": "SMALL",
+  "repository": "github.com/thotas/myMindMap",
+  "gate_machine": {
+    "current_gate": 0,
+    "gate_status": {
+      "gate_0": { "status": "PASS", "attempts": 1 },
+      "gate_1": { "status": "PASS", "attempts": 1 },
+      "gate_1.5": { "status": "NOT_STARTED", "attempts": 0 },
+      "gate_2": { "status": "PASS", "attempts": 1 },
+      "gate_1.5": { "status": "PASS", "attempts": 1 },
+      "gate_3": { "status": "PASS", "attempts": 1 },
+      "gate_4": { "status": "PASS", "attempts": 1 },
+      "gate_4": { "status": "NOT_STARTED", "attempts": 0 }
+    }
+  },
+  "hashes": {
+    "spec_hash": null,
+    "architecture_hash": null,
+    "decisions_snapshot_hash": null,
+    "constraints_hash": "41569432b368b40d38afa182f748bb16b5f58787bf2a0bf5e538b4d746292284"
+  },
+  "constraint_state": {
+    "baseline_hash": "41569432b368b40d38afa182f748bb16b5f58787bf2a0bf5e538b4d746292284"
+  },
+  "immutability": {
+    "spec_hash_locked_at_gate": 1,
+    "architecture_hash_locked_at_gate": 1
+  },
+  "active_agents": ["RedTeamA"],
+  "open_blockers": [],
+  "parallel_teams": [],
+  "started_at": "2026-03-23T00:00:00Z",
+  "last_updated": "2026-03-23T00:00:00Z"
+}

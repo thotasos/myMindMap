@@ -9,40 +9,79 @@ struct ContentView: View {
     @State private var keyboardViewModel = KeyboardViewModel()
 
     @State private var showSearch: Bool = false
+    @State private var showShortcuts: Bool = false
 
     var body: some View {
         ZStack {
             if let mindMap = mindMapViewModel.currentMindMap {
-                CanvasView(
-                    mindMap: mindMap,
-                    canvasViewModel: canvasViewModel,
-                    nodeViewModel: nodeViewModel,
-                    keyboardViewModel: keyboardViewModel
-                )
+                // Fullscreen mode
+                if mindMapViewModel.isFullscreen {
+                    fullscreenCanvas(mindMap: mindMap)
+                } else {
+                    normalCanvas(mindMap: mindMap)
+                }
             } else {
                 WelcomeView(onCreateNew: createNewMindMap)
             }
 
-            VStack {
-                Spacer()
-                StatusBarView(
+            // Floating toolbar
+            if mindMapViewModel.currentMindMap != nil && !mindMapViewModel.isFullscreen {
+                VStack {
+                    Spacer()
+                    HStack {
+                        FloatingToolbarView(
+                            mindMapViewModel: mindMapViewModel,
+                            canvasViewModel: canvasViewModel,
+                            nodeViewModel: nodeViewModel
+                        )
+                        .padding()
+                        Spacer()
+                    }
+                    Spacer()
+                }
+            }
+
+            // Status bar
+            if mindMapViewModel.currentMindMap != nil && !mindMapViewModel.isFullscreen {
+                VStack {
+                    Spacer()
+                    StatusBarView(
+                        mindMap: mindMapViewModel.currentMindMap,
+                        canvasViewModel: canvasViewModel,
+                        mindMapViewModel: mindMapViewModel,
+                        isDirty: mindMapViewModel.isDirty
+                    )
+                }
+            }
+
+            // Shortcuts overlay
+            if showShortcuts {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showShortcuts = false
+                    }
+                KeyboardShortcutsOverlayView(isPresented: $showShortcuts)
+            }
+
+            // Search overlay
+            if showSearch {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showSearch = false
+                    }
+                SearchOverlayView(
                     mindMap: mindMapViewModel.currentMindMap,
                     canvasViewModel: canvasViewModel,
-                    isDirty: mindMapViewModel.isDirty
+                    mindMapViewModel: mindMapViewModel
                 )
             }
-        }
-        .toolbar {
-            ToolbarView(
-                mindMapViewModel: mindMapViewModel,
-                canvasViewModel: canvasViewModel
-            )
         }
         .onAppear {
             setupViewModels()
             mindMapViewModel.loadRecentMindMaps()
 
-            // Create a new mind map if none exists
             if mindMapViewModel.currentMindMap == nil && !mindMapViewModel.recentMindMaps.isEmpty {
                 mindMapViewModel.openMindMap(mindMapViewModel.recentMindMaps.first!)
             } else if mindMapViewModel.currentMindMap == nil {
@@ -61,17 +100,65 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .zoomOut)) { _ in
             canvasViewModel.zoomOut()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .zoomTo100)) { _ in
+            canvasViewModel.zoomTo100()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .fitToScreen)) { _ in
             if let mindMap = mindMapViewModel.currentMindMap {
-                canvasViewModel.fitToScreen(nodes: mindMap.nodes, viewSize: NSScreen.main?.frame.size ?? CGSize(width: 800, height: 600))
+                canvasViewModel.fitToScreen(
+                    nodes: mindMap.nodes,
+                    viewSize: NSScreen.main?.frame.size ?? CGSize(width: 800, height: 600)
+                )
             }
-        }
-        .sheet(isPresented: $showSearch) {
-            SearchOverlayView(mindMap: mindMapViewModel.currentMindMap, canvasViewModel: canvasViewModel)
         }
         .onReceive(NotificationCenter.default.publisher(for: .showSearch)) { _ in
             showSearch = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showShortcuts)) { _ in
+            showShortcuts = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateBack)) { _ in
+            if let nodeId = mindMapViewModel.navigateBack() {
+                canvasViewModel.selectNode(nodeId)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateForward)) { _ in
+            if let nodeId = mindMapViewModel.navigateForward() {
+                canvasViewModel.selectNode(nodeId)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .collapseAll)) { _ in
+            mindMapViewModel.collapseAll()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .expandAll)) { _ in
+            mindMapViewModel.expandAll()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleFullscreen)) { _ in
+            mindMapViewModel.toggleFullscreen()
+        }
+    }
+
+    @ViewBuilder
+    private func normalCanvas(mindMap: MindMap) -> some View {
+        CanvasView(
+            mindMap: mindMap,
+            canvasViewModel: canvasViewModel,
+            nodeViewModel: nodeViewModel,
+            keyboardViewModel: keyboardViewModel,
+            mindMapViewModel: mindMapViewModel
+        )
+    }
+
+    @ViewBuilder
+    private func fullscreenCanvas(mindMap: MindMap) -> some View {
+        CanvasView(
+            mindMap: mindMap,
+            canvasViewModel: canvasViewModel,
+            nodeViewModel: nodeViewModel,
+            keyboardViewModel: keyboardViewModel,
+            mindMapViewModel: mindMapViewModel
+        )
+        .ignoresSafeArea()
     }
 
     private func setupViewModels() {
@@ -114,5 +201,5 @@ struct WelcomeView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [MindMap.self, MindMapNode.self, NodeConnection.self, Theme.self], inMemory: true)
+        .modelContainer(for: [MindMap.self, MindMapNode.self, MindMapConnection.self, Theme.self], inMemory: true)
 }

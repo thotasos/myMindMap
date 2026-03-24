@@ -1,688 +1,754 @@
-# Technical Architecture: myMindMap
+# myMindMap Architecture
 
-**Version:** 1.0
-**Date:** 2026-03-10
-**Status:** Draft
-
----
-
-## 1. Architecture Overview
-
-### 1.1 Design Pattern: MVVM with SwiftUI
-
-The application follows the **Model-View-ViewModel (MVVM)** pattern, leveraging SwiftUI's reactive data binding capabilities. This architecture provides:
-
-- **Separation of Concerns**: Clear boundaries between UI (Views), business logic (ViewModels), and data (Models)
-- **Testability**: ViewModels can be unit tested independently of SwiftUI views
-- **Reactive Updates**: SwiftUI's @Observable and @StateObject properties ensure automatic UI updates
-- **SwiftData Integration**: Seamless persistence with SwiftData's model container and context
-
-### 1.2 Layer Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                      Views Layer                        │
-│  (SwiftUI Views: CanvasView, NodeView, ToolbarView)    │
-└─────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│                   ViewModels Layer                      │
-│  (CanvasViewModel, NodeViewModel, MindMapViewModel,    │
-│   KeyboardViewModel)                                    │
-└─────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│                     Models Layer                        │
-│  (MindMap, MindMapNode, NodeConnection, Theme - SwiftData)        │
-└─────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│                    Persistence Layer                    │
-│           (SwiftData with SQLite backend)              │
-└─────────────────────────────────────────────────────────┘
-```
-
-### 1.3 Data Flow
-
-```
-User Input (Keyboard/Mouse)
-         │
-         ▼
-    ┌─────────┐
-    │  Views  │ <-- SwiftUI renders ViewModels' state
-    └────┬────┘
-         │ @Binding / @Observable
-         ▼
-┌──────────────────────────────────────────────────────────┐
-│                      ViewModels                          │
-│  ┌────────────────┐ ┌────────────────┐ ┌─────────────┐│
-│  │MindMapViewModel│ │CanvasViewModel │ │NodeViewModel│ │
-│  └───────┬────────┘ └───────┬────────┘ └──────┬────────┘│
-└──────────┼──────────────────┼─────────────────┼─────────┘
-           │                  │                 │
-           ▼                  ▼                 ▼
-┌──────────────────────────────────────────────────────────┐
-│                      Models (SwiftData)                   │
-│  ┌──────────┐  ┌──────────────┐  ┌──────────────┐        │
-│  │ MindMap  │──│ MindMapNode  │──│NodeConnection│        │
-│  └──────────┘  └──────────────┘  └──────────────┘        │
-└──────────────────────────────────────────────────────────┘
-           │
-           ▼
-    SQLite Database
-```
+**Version:** 1.0.0
+**Last Updated:** 2026-03-23
+**macOS Version Support:** macOS 14.0+ (Sonoma and later)
 
 ---
 
-## 2. Data Models
+## Section 1: System Diagram
 
-### 2.1 SwiftData Models
-
-All data models use SwiftData's `@Model` macro for automatic persistence.
-
-#### MindMap
-```swift
-@Model
-class MindMap {
-    var id: UUID
-    var title: String
-    var createdAt: Date
-    var modifiedAt: Date
-    var rootNode: MindMapNode?
-    @Relationship(deleteRule: .cascade) var nodes: [MindMapNode]
-    @Relationship(deleteRule: .cascade) var connections: [NodeConnection]
-}
 ```
-
-#### MindMapNode (Node)
-```swift
-@Model
-final class MindMapNode {
-    var id: UUID
-    var text: String
-    var positionX: Double
-    var positionY: Double
-    var width: Double
-    var height: Double
-    var backgroundColorHex: String
-    var textColorHex: String
-    var fontSize: Double
-    var isCollapsed: Bool
-    var createdAt: Date
-    var parent: MindMapNode?
-    @Relationship(inverse: \MindMapNode.parent) var children: [MindMapNode]
-    var outgoingConnections: [NodeConnection]
-    var incomingConnections: [NodeConnection]
-    var mindMap: MindMap?
-}
-```
-
-#### NodeConnection (Connection)
-```swift
-@Model
-final class NodeConnection {
-    var id: UUID
-    var styleRawValue: String
-    var colorHex: String
-    var createdAt: Date
-    var sourceNode: MindMapNode?
-    var targetNode: MindMapNode?
-    var mindMap: MindMap?
-}
-```
-
-#### Theme
-```swift
-@Model
-class Theme {
-    var id: UUID
-    var name: String
-    var backgroundColor: String
-    var nodeBackgroundColor: String
-    var nodeTextColor: String
-    var connectionColor: String
-    var isDarkMode: Bool
-    var isDefault: Bool
-}
-```
-
-### 2.2 Enums
-
-```swift
-enum ConnectionStyle: String, Codable {
-    case straight
-    case curved
-    case bezier
-}
-
-enum NodeLevel: Int, Codable {
-    case root = 0
-    case primary = 1
-    case secondary = 2
-    case tertiary = 3
-}
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                                    NSDocument Layer                                  │
+│  ┌────────────────────────────────────────────────────────────────────────────────┐ │
+│  │                     MindMapDocument (NSDocument)                                │ │
+│  │  - Manages file I/O (.mindmap bundled directory)                                 │ │
+│  │  - Auto-backup via Timer.publish (every 30s or on change)                       │ │
+│  │  - Corruption recovery UI via NSError Recovery Attempting                       │ │
+│  │  - changeCount tracking for dirty state                                         │ │
+│  └────────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                          │
+                                          ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                                   MainActor Layer                                    │
+│  ┌────────────────────────────────────────────────────────────────────────────────┐ │
+│  │              MindMapViewModel (@Observable, @MainActor, actor)                   │ │
+│  │  - selectedNodeId: UUID?                                                        │ │
+│  │  - expandedNodeIds: Set<UUID>                                                 │ │
+│  │  - canvasOffset: CGPoint                                                      │ │
+│  │  - canvasZoom: CGFloat (0.1...4.0)                                            │ │
+│  │  - isFullscreen: Bool                                                         │ │
+│  │  - isShortcutsOverlayVisible: Bool                                            │ │
+│  │  - searchQuery: String                                                        │ │
+│  │  - navigationHistory: [UUID] (Cmd+[/] navigation)                              │ │
+│  │  - autoSaveTimer: Timer.publish                                               │ │
+│  └────────────────────────────────────────────────────────────────────────────────┘ │
+│                                          │                                          │
+│                    ┌─────────────────────┼─────────────────────┐                   │
+│                    ▼                     ▼                     ▼                   │
+│     ┌─────────────────────────┐  ┌─────────────────────────┐  ┌─────────────────┐  │
+│     │  SwiftData ModelContext │  │   MindMapRepository     │  │  Theme System   │  │
+│     │  (@MainActor only)      │  │   (Protocol + Impl)     │  │  (Dark/Light)   │  │
+│     │  - MindMap              │  │   - save()             │  │  - 300ms anim   │  │
+│     │  - MindMapNode          │  │   - load()             │  │  - Dynamic colors│  │
+│     │  - MindMapConnection    │  │   - queryByViewport()  │  │                 │  │
+│     └─────────────────────────┘  └─────────────────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                          │
+                                          ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                                    SwiftUI View Layer                                │
+│  ┌────────────────────────────────────────────────────────────────────────────────┐ │
+│  │                           CanvasView (Root)                                   │ │
+│  │  - Fullscreen distraction-free mode                                            │ │
+│  │  - Keyboard event handling (arrow nav, Cmd+N, Cmd+?)                           │ │
+│  │  - Gesture handling (pan, pinch zoom)                                         │ │
+│  │  - Auto-zoom to fit (50pt padding, 300ms ease-in-out)                         │ │
+│  └────────────────────────────────────────────────────────────────────────────────┘ │
+│                    │                                 │                              │
+│                    ▼                                 ▼                              │
+│     ┌─────────────────────────┐        ┌─────────────────────────┐               │
+│     │  ConnectionsLayerView   │        │     NodesLayerView      │               │
+│     │  - Bezier paths         │        │  - Viewport culling     │               │
+│     │  - 1.5pt stroke         │        │  - R-tree spatial index │               │
+│     │  - 8 HSB hue colors     │        │  - ForEach/idempotent   │               │
+│     └─────────────────────────┘        └─────────────────────────┘               │
+│                                                 │                                   │
+│                                                 ▼                                   │
+│                                      ┌─────────────────────┐                        │
+│                                      │     NodeView        │                        │
+│                                      │  - Auto-size font   │                        │
+│                                      │    (24pt→12pt)      │                        │
+│                                      │  - Rounded rect     │                        │
+│                                      │    (8pt radius)     │                        │
+│                                      │  - Notes: 2 lines   │                        │
+│                                      │    10pt SF Pro Italic│                       │
+│                                      └─────────────────────┘                        │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                          │
+                                          ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                                   Overlay Layer                                     │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────────┐  │
+│  │KeyboardShortcuts     │  │   SearchOverlayView  │  │    StatusBarView        │  │
+│  │OverlayView           │  │   (Cmd+F)            │  │    - Node count         │  │
+│  │(Cmd+?)               │  │   - Real-time filter │  │    - Zoom level         │  │
+│  │- Floating panel     │  │   - Highlight match  │  │    - Save status        │  │
+│  └──────────────────────┘  └──────────────────────┘  └──────────────────────────┘  │
+│                                                                                     │
+│  ┌────────────────────────────────────────────────────────────────────────────────┐ │
+│  │                           ToolbarView (Floating)                               │ │
+│  │  - Add child node (Cmd+N)                                                      │ │
+│  │  - Delete node (Delete)                                                       │ │
+│  │  - Toggle expand (Cmd+E)                                                      │ │
+│  │  - Zoom controls (+/-)                                                        │ │
+│  │  - Fit to screen (Cmd+0)                                                      │ │
+│  └────────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. ViewModels
+## Section 2: Component Breakdown
 
-### 3.1 MindMapViewModel
+### MindMapDocument (NSDocument Subclass)
 
-**Responsibility**: Manages the overall mind map document lifecycle
-
-```swift
-@Observable
-class MindMapViewModel {
-    // Published properties
-    var currentMindMap: MindMap?
-    var recentMindMaps: [MindMap]
-    var isDirty: Bool
-
-    // Methods
-    func createNewMap(title: String)
-    func openMindMap(id: UUID)
-    func saveMindMap()
-    func deleteMindMap(id: UUID)
-    func exportToJSON() -> Data?
-    func exportToMarkdown() -> String?
-    func exportToPNG() -> NSImage?
-}
-```
-
-### 3.2 CanvasViewModel
-
-**Responsibility**: Manages canvas state, pan/zoom, and viewport calculations
-
-```swift
-@Observable
-class CanvasViewModel {
-    // Viewport state
-    var scale: CGFloat = 1.0
-    var offset: CGPoint = .zero
-    var visibleRect: CGRect
-
-    // Selection state
-    var selectedNodeIDs: Set<UUID>
-    var focusedNodeID: UUID?
-
-    // Methods
-    func zoomIn()
-    func zoomOut()
-    func fitToScreen()
-    func pan(by delta: CGPoint)
-    func nodeAt(point: CGPoint) -> Node?
-    func visibleNodes() -> [Node]
-}
-```
-
-### 3.3 NodeViewModel
-
-**Responsibility**: Manages node editing and manipulation
-
-```swift
-@Observable
-class NodeViewModel {
-    // Node state
-    var editingNodeID: UUID?
-    var editText: String
-
-    // Methods
-    func addChildNode(to nodeID: UUID) -> Node
-    func addSiblingNode(to nodeID: UUID) -> Node
-    func deleteNode(id: UUID)
-    func duplicateNode(id: UUID) -> Node?
-    func moveNode(id: UUID, to position: CGPoint)
-    func collapseNode(id: UUID)
-    func expandNode(id: UUID)
-}
-```
-
-### 3.4 KeyboardViewModel
-
-**Responsibility**: Handles keyboard shortcut processing and command routing
-
-```swift
-@Observable
-class KeyboardViewModel {
-    // Command state
-    var isCommandMode: Bool
-    var lastKeyPress: KeyEquivalent
-
-    // Methods
-    func handleKeyPress(_ key: KeyEquivalent, modifiers: EventModifiers) -> Bool
-    func registerShortcut(_ shortcut: KeyboardShortcut, action: () -> Void)
-}
-```
-
----
-
-## 4. Views
-
-### 4.1 Main Window Structure
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Menu Bar (File, Edit, View, Node, Help)               │
-├─────────────────────────────────────────────────────────┤
-│  Toolbar (New, Save, Export, Undo, Redo, Zoom)         │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│                   Canvas View                           │
-│    ┌─────────┐                                         │
-│    │  Root   │──────┐                                  │
-│    │  Node   │      ▼                                  │
-│    └─────────┘   ┌─────────┐                           │
-│                  │ Child   │                           │
-│                  └─────────┘                           │
-│                                                         │
-├─────────────────────────────────────────────────────────┤
-│  Status Bar (Node count, Zoom level, Save status)      │
-└─────────────────────────────────────────────────────────┘
-```
-
-### 4.2 Core Views
-
-| View | Responsibility |
-|------|---------------|
-| `MyMindMapApp.swift` | App entry point, SwiftData container setup |
-| `ContentView.swift` | Main window content, window configuration |
-| `CanvasView.swift` | Infinite canvas with pan/zoom gestures |
-| `NodeView.swift` | Individual node rendering and interaction |
-| `ConnectionView.swift` | Bezier curve connections between nodes |
-| `ToolbarView.swift` | Top toolbar with actions |
-| `StatusBarView.swift` | Bottom status bar information |
-| `SearchOverlayView.swift` | Search/filter overlay (Cmd+F) |
-| `ExportSheetView.swift` | Export format selection dialog |
-
-### 4.3 Canvas Rendering Approach
-
-The canvas uses a **hybrid rendering approach**:
-
-1. **SwiftUI Canvas (Canvas API)**: For rendering connections (bezier curves) efficiently at scale
-2. **SwiftUI Views**: For nodes (NodeView) to leverage SwiftUI's text handling and accessibility
-3. **GeometryReader**: For viewport calculations and hit testing
-
-```swift
-struct CanvasView: View {
-    @State private var scale: CGFloat = 1.0
-    @State private var offset: CGPoint = .zero
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Background
-                Canvas { context, size in
-                    // Draw grid background if enabled
-                }
-                .scaleEffect(scale)
-
-                // Connections layer
-                ConnectionsLayerView()
-                    .scaleEffect(scale)
-
-                // Nodes layer
-                NodesLayerView()
-                    .scaleEffect(scale)
-            }
-            .offset(x: offset.x, y: offset.y)
-            .gesture(panGesture)
-            .gesture(magnificationGesture)
-        }
-    }
-}
-```
-
----
-
-## 5. Keyboard Handling
-
-Keyboard handling is managed through the `KeyboardViewModel` using SwiftUI's `onKeyPress` modifier.
-
-### 5.1 KeyboardViewModel
-
-Handles keyboard shortcut processing and command routing.
-
-```swift
-@Observable
-class KeyboardViewModel {
-    // Properties
-    var isCommandMode: Bool
-    var lastKeyPress: KeyEquivalent?
-
-    // Methods
-    func handleKeyPress(_ key: KeyEquivalent, modifiers: EventModifiers) -> Bool
-}
-```
-
-### 5.2 Default Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| Cmd+N | New Mind Map |
-| Cmd+S | Save |
-| Cmd+Z | Undo |
-| Cmd+Shift+Z | Redo |
-| Tab | Add Child Node |
-| Enter | Add Sibling Node / Edit |
-| Delete/Backspace | Delete Node |
-| Escape | Deselect / Cancel |
-| Arrow Keys | Navigate Nodes |
-| Cmd++ | Zoom In |
-| Cmd+- | Zoom Out |
-| Cmd+0 | Fit to Screen |
-| Cmd+F | Search |
-| Cmd+D | Duplicate Node |
-| Cmd+Up/Down | Move Node |
-| Cmd+Enter | Collapse/Expand |
-
----
-
-## 6. Persistence Layer
-
-### 6.1 SwiftData Configuration
-
-```swift
-// App entry point configuration
-@main
-struct MyMindMapApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-        .modelContainer(for: [
-            MindMap.self,
-            MindMapNode.self,
-            NodeConnection.self,
-            Theme.self
-        ])
-    }
-}
-```
-
-### 6.2 Storage Location
-
-- **Default**: App's Application Support directory (`~/Library/Application Support/myMindMap/`)
-- **File Format**: SwiftData's default SQLite storage
-- **Auto-save**: Changes saved automatically via SwiftData's observation system
-
----
-
-## 8. Performance Considerations
-
-### 8.1 Rendering Optimization
-
-- **Viewport Culling**: Only render nodes within visible rect
-- **Lazy Loading**: Use SwiftUI's lazy loading for large node collections
-- **Connection Batching**: Draw all connections in single Canvas pass
-
-### 8.2 Memory Management
-
-- **Node Pooling**: Reuse node views when scrolling
-- **Image Caching**: Cache exported images temporarily
-- **SwiftData Fetch Limits**: Paginate when loading large maps
-
-### 8.3 Targets
-
-| Metric | Target |
+| Aspect | Detail |
 |--------|--------|
-| App Launch | < 1 second |
-| Node Creation | < 50ms |
-| Canvas FPS (500 nodes) | 60 fps |
-| Auto-save Latency | < 100ms |
+| **File Type** | `.mindmap` (bundled directory) |
+| **Bundle Contents** | SwiftData store + metadata.json + resources/ |
+| **Auto-Backup** | Timer.publish every 30s when dirty, stored in `.backup/` |
+| **Corruption Recovery** | NSError Recovery Attempting with "Recover from Backup" option |
+| **Security** | App Sandbox + NSFileProtectionComplete |
+| **Bookmarks** | Security-Scoped Bookmarks for file access persistence |
+| **Key Methods** | `read(from:ofType:)`, `write(to:ofType:)`, `fileWrapper()` |
+
+### MindMapViewModel (@Observable, @MainActor, actor-isolated)
+
+| Aspect | Detail |
+|--------|--------|
+| **Isolation** | @MainActor - all SwiftData ops on main thread |
+| **Auto-Save** | Timer.publish (30s interval) via MainActor.assumeIsolated |
+| **History** | navigationHistory stack, Cmd+[/] navigation |
+| **Debounce** | Cmd+N debounced 500ms |
+| **State** | selectedNodeId, expandedNodeIds, canvasOffset, canvasZoom |
+| **Validation** | Node text max 10,000 chars, input sanitization for exports |
+
+### CanvasView (Root SwiftUI View)
+
+| Aspect | Detail |
+|--------|--------|
+| **Role** | Root view, handles all keyboard input |
+| **Focus** | FocusState for keyboard navigation |
+| **Gestures** | DragGesture (pan), MagnificationGesture (zoom) |
+| **Viewport** | Culling via GeometryReader, passes visible rect to layers |
+| **Animation** | 300ms ease-in-out for zoom transitions |
+
+### NodeView (Individual Node Rendering)
+
+| Aspect | Detail |
+|--------|--------|
+| **Container** | RoundedRectangle, 8pt corner radius |
+| **Title Font** | depth-based: 24pt (depth 0) → 12pt (depth 12+) |
+| **Notes** | 2 lines visible, 10pt SF Pro Italic, max 10,000 chars |
+| **Selection** | Blue border ring on selection |
+| **Expand/Collapse** | Chevron icon for nodes with children |
+| **TextField** | onCommit triggers ViewModel.updateTitle() |
+
+### NodesLayerView (Viewport Culling Layer)
+
+| Aspect | Detail |
+|--------|--------|
+| **Spatial Index** | R-tree (R*tree or RBush) for O(log n) viewport queries |
+| **Culling** | Only renders nodes intersecting visible rect + margin |
+| **Performance Target** | 60fps at 10,000 nodes |
+| **Lazy Build** | R-tree built on background thread, accessed on main |
+| **Implementation** | ForEach with explicit id, keyed by node.id |
+
+### ConnectionsLayerView (Bezier Connectors)
+
+| Aspect | Detail |
+|--------|--------|
+| **Path Type** | Bezier curves (cubic) from parent center to child center |
+| **Stroke** | 1.5pt, 8 HSB hue colors distributed by depth |
+| **Culling** | Only paths where either endpoint visible |
+| **Style** | Colorful thin connectors, anti-aliased |
+
+### KeyboardShortcutsOverlayView (Floating Panel)
+
+| Aspect | Detail |
+|--------|--------|
+| **Trigger** | Cmd+? (also Esc to dismiss) |
+| **Position** | Centered floating panel, 400x300pt |
+| **Content** | Shortcut reference table |
+| **Style** | NSVisualEffectView with .hudWindow material |
+
+### Theme (Dark/Light Mode System)
+
+| Aspect | Detail |
+|--------|--------|
+| **Default** | Dark mode |
+| **Transition** | 300ms animated (NSAnimationContext) |
+| **Colors** | Dynamic system colors (Color.accentColor, etc.) |
+| **Override** | User can force light/dark via Appearance settings |
+
+### MindMapRepository (Protocol + SwiftData Implementation)
+
+| Aspect | Detail |
+|--------|--------|
+| **Protocol** | `save()`, `load()`, `queryByViewport(rect:)` |
+| **SwiftData** | ModelContext-based, @MainActor |
+| **Spatial Query** | R-tree backed viewport queries |
+| **Swapability** | Can replace with SQLite.swift without changing ViewModel |
 
 ---
 
-## 9. File Structure
+## Section 3: Data Flow
 
-Note: The current implementation follows this structure but may not include all files mentioned (e.g., Services are not yet implemented).
+### Node Edit Flow
 
 ```
-myMindMap/
-├── Sources/
-│   ├── App/
-│   │   └── MyMindMapApp.swift          # App entry point, SwiftData container
-│   ├── Models/
-│   │   ├── MindMap.swift               # Mind map document model
-│   │   ├── Node.swift                  # MindMapNode model
-│   │   ├── Connection.swift           # NodeConnection model
-│   │   └── Theme.swift                # Theme configuration
-│   ├── ViewModels/
-│   │   ├── MindMapViewModel.swift      # Mind map lifecycle management
-│   │   ├── CanvasViewModel.swift       # Canvas state, pan/zoom, viewport
-│   │   ├── NodeViewModel.swift         # Node editing and manipulation
-│   │   └── KeyboardViewModel.swift     # Keyboard shortcut handling
-│   ├── Views/
-│   │   ├── ContentView.swift           # Main window content
-│   │   ├── Canvas/
-│   │   │   ├── CanvasView.swift        # Infinite canvas with pan/zoom
-│   │   │   ├── ConnectionsLayerView.swift  # Bezier curve connections
-│   │   │   └── NodesLayerView.swift    # Node layer rendering
-│   │   ├── Nodes/
-│   │   │   └── NodeView.swift          # Individual node rendering
-│   │   ├── Toolbar/
-│   │   │   └── ToolbarView.swift      # Toolbar with actions
-│   │   └── Overlays/
-│   │       ├── StatusBarView.swift     # Status bar information
-│   │       └── SearchOverlayView.swift # Search/filter overlay
-│   └── Utilities/
-│       ├── Extensions/
-│       │   ├── Color+Hex.swift         # Hex color conversion
-│       │   └── CGPoint+Extensions.swift # CGPoint utilities
-│       └── Constants.swift             # App constants
-├── Resources/
-│   ├── Assets.xcassets/                # App icons and images
-│   ├── Info.plist                     # App configuration
-│   └── myMindMap.entitlements         # App sandbox entitlements
-├── project.yml                         # XcodeGen configuration
-└── README.md                           # Project documentation
+1. USER INPUT
+   └─> User types in NodeView.textField, presses Return
+       │
+2. CANVAS VIEW CHECK
+   └─> CanvasView monitors focus via FocusState
+       │
+3. NODE VIEW COMMIT
+   └─> NodeView.textField.onCommit fires
+       └─> NodeViewModel.updateTitle(newTitle)
+           │
+4. VIEWMODEL PROCESSING (@MainActor)
+   └─> Validates text (max 10,000 chars)
+   └─> Updates MindMapNode.title in ModelContext
+   └─> Sets document.needsBackup = true
+   └─> Triggers auto-save timer reset
+       │
+5. AUTO-SAVE TIMER (MainActor.assumeIsolated)
+   └─> Timer.publish fires on main runloop
+       └─> Task { @MainActor in
+               try? ModelContext.save()
+               MindMapDocument.updateChangeCount()
+             }
+       │
+6. DOCUMENT SYNC
+   └─> NSDocument detects change count increment
+       └─> File coordinator writes to .mindmap bundle
+```
+
+### Keyboard Navigation Flow
+
+```
+1. CanvasView receives keyDown via View.onKeyDown
+   │
+2. Arrow Keys → Navigate selectedNodeId
+   └─> Find adjacent node in tree structure
+   └─> Update navigationHistory
+   │
+3. Cmd+[ → Navigate back in history
+   └─> Pop from navigationHistory stack
+   └─> Set selectedNodeId to previous
+   │
+4. Cmd+] → Navigate forward
+   └─> (Future: redo stack)
+```
+
+### Search Flow
+
+```
+1. Cmd+F toggles SearchOverlayView
+   │
+2. User types query
+   └─> searchQuery updates in MindMapViewModel
+   └─> NodesLayerView filters: node.title.localizedContains(query)
+       │
+3. Matching nodes highlighted
+   │
+4. Enter selects next match
+   └─> Updates selectedNodeId
 ```
 
 ---
 
-## 10. Dependencies
+## Section 4: State Management
 
-### Native Frameworks (No External Dependencies)
+### MindMapViewModel (@Observable, @MainActor)
 
-| Framework | Purpose |
-|-----------|---------|
-| SwiftUI | UI Framework |
-| SwiftData | Persistence |
-| Foundation | Core utilities |
-| AppKit | macOS integration |
-| UniformTypeIdentifiers | File types for export |
+```swift
+@Observable
+@MainActor
+final class MindMapViewModel {
 
-### No External Dependencies Required
+    // Selection State
+    var selectedNodeId: UUID?
+    var expandedNodeIds: Set<UUID> = []
 
-The MVP uses only native Apple frameworks, ensuring:
-- Faster builds
-- Smaller app size
-- No dependency management complexity
-- Maximum compatibility
+    // Canvas State
+    var canvasOffset: CGPoint = .zero
+    var canvasZoom: CGFloat = 1.0  // 0.1...4.0 range
+
+    // UI State
+    var isFullscreen: Bool = false
+    var isShortcutsOverlayVisible: Bool = false
+    var isSearchOverlayVisible: Bool = false
+    var searchQuery: String = ""
+
+    // Navigation
+    var navigationHistory: [UUID] = []
+    var historyIndex: Int = -1
+
+    // Document Reference
+    var document: MindMapDocument?
+    var modelContext: ModelContext?
+
+    // Auto-Save
+    private var autoSaveTimer: Timer?
+    private var needsSave: Bool = false
+}
+```
+
+### State Transition Rules
+
+| Action | State Change |
+|--------|--------------|
+| Click node | selectedNodeId = clicked.id |
+| Cmd+E | Toggle node.id in expandedNodeIds |
+| Cmd+N | Create child of selected, add to expandedNodeIds |
+| Delete | Remove selected from parent, cascade delete children |
+| Cmd+0 | canvasZoom = fitToContent(), animate 300ms |
+| Cmd+? | isShortcutsOverlayVisible.toggle() |
+| Cmd+F | isSearchOverlayVisible.toggle() |
+| Focus change | Updates via @Environment(\.colorScheme) observation |
+
+### Auto-Save Mechanism
+
+```swift
+// Timer.publish runs on main runloop
+autoSaveTimer = Timer.publish(every: 30, on: .main, in: .common)
+    .autoconnect()
+    .sink { [weak self] _ in
+        Task { @MainActor [weak self] in
+            guard let self, self.needsSave else { return }
+            try? self.modelContext?.save()
+            self.document?.updateChangeCount()
+            self.needsSave = false
+        }
+    }
+
+// Timer callback requires MainActor.assumeIsolated for safety
+MainActor.assumeIsolated {
+    autoSaveTimer?.sink { ... }
+}
+```
 
 ---
 
-## 11. Accessibility
+## Section 5: Storage Schema
 
-- **VoiceOver**: Full support via SwiftUI's built-in accessibility
-- **Keyboard Navigation**: All features accessible via keyboard
-- **High Contrast**: Respects system accessibility settings
-- **Dynamic Type**: Node text respects system font size preferences
-
----
-
-## 12. API Reference
-
-This section documents the public interfaces for the main ViewModels and services.
-
-### 12.1 MindMapViewModel
-
-Manages the overall mind map document lifecycle.
-
-```swift
-@Observable
-class MindMapViewModel {
-    // Properties
-    var currentMindMap: MindMap?
-    var recentMindMaps: [MindMap]
-    var isDirty: Bool
-
-    // Methods
-    func setModelContext(_ context: ModelContext)
-    func createNewMindMap()
-    func saveMindMap()
-    func loadRecentMindMaps()
-    func openMindMap(_ mindMap: MindMap)
-    func deleteMindMap(_ mindMap: MindMap)
-}
-```
-
-### 12.2 CanvasViewModel
-
-Manages canvas state, pan/zoom, and viewport calculations.
-
-```swift
-@Observable
-class CanvasViewModel {
-    // Viewport state
-    var scale: CGFloat = 1.0
-    var offset: CGPoint = .zero
-
-    // Selection state
-    var selectedNodeIDs: Set<UUID>
-    var focusedNodeID: UUID?
-
-    // Methods
-    func zoomIn()
-    func zoomOut()
-    func fitToScreen()
-    func pan(by delta: CGPoint)
-    func nodeAt(point: CGPoint) -> MindMapNode?
-}
-```
-
-### 12.3 NodeViewModel
-
-Manages node editing and manipulation.
-
-```swift
-@Observable
-class NodeViewModel {
-    // Node state
-    var editingNodeID: UUID?
-    var editText: String
-
-    // Methods
-    func addChildNode(to nodeID: UUID) -> MindMapNode?
-    func addSiblingNode(to nodeID: UUID) -> MindMapNode?
-    func deleteNode(id: UUID)
-    func duplicateNode(id: UUID) -> MindMapNode?
-    func moveNode(id: UUID, to position: CGPoint)
-    func collapseNode(id: UUID)
-    func expandNode(id: UUID)
-}
-```
-
-### 12.4 KeyboardViewModel
-
-Handles keyboard shortcut processing and command routing.
-
-```swift
-@Observable
-class KeyboardViewModel {
-    // Properties
-    var isCommandMode: Bool
-    var lastKeyPress: KeyEquivalent?
-
-    // Methods
-    func handleKeyPress(_ key: KeyEquivalent, modifiers: EventModifiers) -> Bool
-}
-```
-
-### 12.5 SwiftData Models
-
-#### MindMap
+### SwiftData Entities
 
 ```swift
 @Model
-class MindMap {
-    var id: UUID
+final class MindMap {
+    @Attribute(.unique) var id: UUID
     var title: String
     var createdAt: Date
-    var modifiedAt: Date
+    var updatedAt: Date
 
+    @Relationship(deleteRule: .cascade, inverse: \MindMapNode.mindMap)
     var nodes: [MindMapNode]
-    var connections: [NodeConnection]
 
-    func markModified()
+    @Relationship(deleteRule: .cascade, inverse: \MindMapConnection.mindMap)
+    var connections: [MindMapConnection]
+
+    init(
+        id: UUID = UUID(),
+        title: String = "Untitled Mind Map",
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.nodes = []
+        self.connections = []
+    }
 }
-```
 
-#### MindMapNode
-
-```swift
 @Model
 final class MindMapNode {
-    var id: UUID
-    var text: String
-    var positionX: Double
-    var positionY: Double
-    var width: Double
-    var height: Double
-    var backgroundColorHex: String
-    var textColorHex: String
-    var fontSize: Double
-    var isCollapsed: Bool
-    var createdAt: Date
-
-    var parent: MindMapNode?
-    var children: [MindMapNode]
-    var outgoingConnections: [NodeConnection]
-    var incomingConnections: [NodeConnection]
-    var mindMap: MindMap?
-
-    // Computed properties
+    @Attribute(.unique) var id: UUID
+    var title: String
+    var notes: String  // max 10,000 chars
     var position: CGPoint
-    var frame: CGRect
-}
-```
+    var depth: Int
+    var isExpanded: Bool
+    var parentId: UUID?
+    var color: String  // hex format
 
-#### NodeConnection
-
-```swift
-@Model
-final class NodeConnection {
-    var id: UUID
-    var styleRawValue: String
-    var colorHex: String
-    var createdAt: Date
-
-    var sourceNode: MindMapNode?
-    var targetNode: MindMapNode?
     var mindMap: MindMap?
 
-    var style: ConnectionStyle
+    // Computed for layout
+    var children: [MindMapNode] {
+        mindMap?.nodes.filter { $0.parentId == self.id } ?? []
+    }
+
+    init(
+        id: UUID = UUID(),
+        title: String = "",
+        notes: String = "",
+        position: CGPoint = .zero,
+        depth: Int = 0,
+        isExpanded: Bool = true,
+        parentId: UUID? = nil,
+        color: String = "#4A90D9"
+    ) {
+        self.id = id
+        self.title = title
+        self.notes = notes
+        self.position = position
+        self.depth = depth
+        self.isExpanded = isExpanded
+        self.parentId = parentId
+        self.color = color
+    }
+}
+
+@Model
+final class MindMapConnection {
+    @Attribute(.unique) var id: UUID
+    var sourceNodeId: UUID
+    var targetNodeId: UUID
+    var color: String  // hex format
+
+    var mindMap: MindMap?
+
+    init(
+        id: UUID = UUID(),
+        sourceNodeId: UUID,
+        targetNodeId: UUID,
+        color: String = "#4A90D9"
+    ) {
+        self.id = id
+        self.sourceNodeId = sourceNodeId
+        self.targetNodeId = targetNodeId
+        self.color = color
+    }
 }
 ```
 
-### 12.6 Enums
+### File Format: .mindmap Bundle
 
-#### ConnectionStyle
+```
+MyMap.mindmap/
+├── metadata.json          # Version, createdAt, mindMapId
+├── store/
+│   └── default.store      # SwiftData SQLite store
+└── resources/
+    └── (future: embedded images, etc.)
+```
+
+### Backup Format
+
+```
+MyMap.mindmap.backup/
+├── backup_YYYYMMDD_HHmmss/
+│   ├── metadata.json
+│   └── store/
+│       └── default.store
+└── latest -> backup_YYYYMMDD_HHmmss/  # symlink
+```
+
+---
+
+## Section 6: Async/Concurrency Model
+
+### Threading Strategy
+
+| Operation | Thread/Actor | Notes |
+|-----------|--------------|-------|
+| SwiftData access | @MainActor only | ModelContext is main-actor isolated |
+| UI updates | @MainActor | All SwiftUI views |
+| File I/O | NSDocument background | Via NSFileCoordinator |
+| R-tree build | Background thread | Task { } with .background QoS |
+| R-tree query | Main thread | After async build completes |
+| Auto-save | MainActor.assumeIsolated | Timer callbacks cross actor boundary |
+
+### R-tree Spatial Index
 
 ```swift
-enum ConnectionStyle: String, Codable, CaseIterable {
-    case straight
-    case curved
-    case bezier
+actor SpatialIndex {
+    private var tree: RBush<IndexedNode>
+    private var isBuilt: Bool = false
 
-    var displayName: String
+    // Built lazily on background thread
+    func build(nodes: [MindMapNode]) async {
+        let indexed = nodes.map { IndexedNode(node: $0) }
+        tree = RBush(entries: indexed)
+        tree.build()
+        isBuilt = true
+    }
+
+    // O(log n) viewport query, called on main thread
+    func queryViewport(_ rect: CGRect) -> [UUID] {
+        guard isBuilt else { return [] }
+        return tree.search(rect).map { $0.id }
+    }
+}
+
+// Usage in NodesLayerView
+@State private var spatialIndex = SpatialIndex()
+let visibleNodeIds: [UUID] = await spatialIndex.queryViewport(visibleRect)
+```
+
+### Auto-Save Concurrency
+
+```swift
+// Timer.publish delivers to main runloop
+// We need MainActor.assumeIsolated to call @MainActor methods
+MainActor.assumeIsolated {
+    autoSaveTimer = Timer.publish(every: 30, on: .main, in: .common)
+        .autoconnect()
+        .sink { [weak self] _ in
+            Task { @MainActor [weak self] in
+                try? self?.modelContext?.save()
+                self?.document?.updateChangeCount()
+            }
+        }
 }
 ```
 
 ---
 
-*Document Version: 1.0*
-*Last Updated: 2026-03-10*
+## Section 7: Error Handling Strategy
+
+### Error Types
+
+| Error Type | Handling Strategy |
+|------------|-------------------|
+| SwiftData save failure | Show alert with "Retry" / "Discard Changes" options |
+| File I/O read failure | Attempt backup restore, show "Recovered from Backup" alert |
+| File I/O write failure | Keep in-memory, retry on next auto-save, warn user |
+| Corruption detected | Offer to restore from .backup directory |
+| Memory pressure | Flush R-tree cache, rebuild on next viewport change |
+
+### NSDocument Error Recovery
+
+```swift
+extension MindMapDocument {
+    override func handleError(_ error: Error, userInteractionMethod: NSUserInteractionMethod) async -> Bool {
+        guard let documentError = error as? DocumentError else {
+            return await super.handleError(error, userInteractionMethod: userInteractionMethod)
+        }
+
+        switch documentError {
+        case .fileCorrupted:
+            return await try await presentRecoveryError(
+                documentError,
+                options: [
+                    "Restore from Backup": restoreFromBackup,
+                    "Create New Document": createNewDocument
+                ],
+                recoveryDelegate: self,
+                userInteractionMethod: userInteractionMethod
+            )
+
+        case .saveFailed:
+            return await try await presentRecoveryError(
+                documentError,
+                options: [
+                    "Retry": { [weak self] in try await self?.saveToURL() },
+                    "Choose Different Location": { [weak self] in self?.saveToNewLocation() }
+                ],
+                recoveryDelegate: self,
+                userInteractionMethod: userInteractionMethod
+            )
+        }
+    }
+}
+```
+
+### Auto-Backup Implementation
+
+```swift
+func performBackup() throws {
+    let backupDir = containerURL.appendingPathComponent(".backup")
+    try FileManager.default.createDirectory(at: backupDir, withIntermediateDirectories: true)
+
+    let timestamp = ISO8601DateFormatter().string(from: Date())
+        .replacingOccurrences(of: ":", with: "-")
+
+    let backupVersion = backupDir.appendingPathComponent("backup_\(timestamp)")
+
+    // Copy current to backup (atomic if possible)
+    let coordinator = NSFileCoordinator()
+    var coordinatorError: NSError?
+
+    coordinator.coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinatorError) { url in
+        try? FileManager.default.copyItem(at: url, to: backupVersion)
+    }
+
+    if let error = coordinatorError {
+        throw error
+    }
+
+    // Prune old backups (keep last 10)
+    pruneOldBackups(keeping: 10)
+}
+```
+
+### Corruption Recovery UI
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ⚠️  Document Recovery                                      │
+│                                                              │
+│  The document "MyMap.mindmap" could not be opened           │
+│  because it appears to be corrupted.                        │
+│                                                              │
+│  [ ] Restore from most recent backup (Recommended)          │
+│      "MyMap.mindmap.backup/backup_20260323_143052/"         │
+│                                                              │
+│  [ ] Create a new empty document                            │
+│                                                              │
+│                    [Cancel]  [Restore]                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Section 8: Extension Points
+
+### Export Formats
+
+| Format | Module | Implementation |
+|--------|--------|----------------|
+| JSON | MindMapExportJSON | Codable export with full fidelity |
+| Markdown | MindMapExportMarkdown | Hierarchical outline format |
+| PNG | MindMapExportPNG | Canvas snapshot via view.render() |
+
+```swift
+protocol MindMapExportable {
+    func export(mindMap: MindMap, to url: URL) async throws
+}
+
+final class MindMapExportJSON: MindMapExportable {
+    func export(mindMap: MindMap, to url: URL) async throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(mindMap)
+        try data.write(to: url)
+    }
+}
+
+final class MindMapExportMarkdown: MindMapExportable {
+    func export(mindMap: MindMap, to url: URL) async throws {
+        let text = renderMarkdown(mindMap.rootNode)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+    }
+}
+
+final class MindMapExportPNG: MindMapExportable {
+    func export(mindMap: MindMap, to url: URL) async throws {
+        let renderer = ImageRenderer(content: CanvasView(viewModel: viewModel))
+        renderer.render { image, error in
+            guard let cgImage = image?.cgImage else { throw error }
+            try? NSBitmapImageRep(cgImage: cgImage).representation(.png)?.write(to: url)
+        }
+    }
+}
+```
+
+### Repository Pattern
+
+The `MindMapRepository` protocol allows swapping SwiftData for alternative backends:
+
+```swift
+protocol MindMapRepository: AnyObject {
+    @MainActor func save(_ mindMap: MindMap) async throws
+    @MainActor func load(id: UUID) async throws -> MindMap
+    @MainActor func queryViewport(_ rect: CGRect) async throws -> [MindMapNode]
+    @MainActor func delete(_ mindMap: MindMap) async throws
+}
+
+// SwiftData Implementation
+final class SwiftDataMindMapRepository: MindMapRepository {
+    private let modelContext: ModelContext
+
+    @MainActor func save(_ mindMap: MindMap) async throws {
+        modelContext.insert(mindMap)
+        try modelContext.save()
+    }
+}
+
+// SQLite.swift Alternative (future)
+final class SQLiteMindMapRepository: MindMapRepository {
+    private let database: Connection
+
+    @MainActor func save(_ mindMap: MindMap) async throws {
+        // SQLite.swift insert/replace
+    }
+}
+```
+
+### Theme System
+
+```swift
+struct Theme {
+    let nodeBackground: Color
+    let nodeBorder: Color
+    let nodeTitle: Color
+    let nodeNotes: Color
+    let connectorColors: [Color]  // 8 HSB hues
+
+    static let dark = Theme(
+        nodeBackground: Color(hex: "#2D2D2D"),
+        nodeBorder: Color(hex: "#4A4A4A"),
+        nodeTitle: .white,
+        nodeNotes: Color(hex: "#AAAAAA"),
+        connectorColors: [
+            Color(hue: 0.0, saturation: 0.7, brightness: 0.9),   // Red
+            Color(hue: 0.1, saturation: 0.7, brightness: 0.9),   // Orange
+            Color(hue: 0.2, saturation: 0.7, brightness: 0.9),   // Yellow
+            Color(hue: 0.3, saturation: 0.7, brightness: 0.9),  // Green
+            Color(hue: 0.5, saturation: 0.7, brightness: 0.9),   // Blue
+            Color(hue: 0.6, saturation: 0.7, brightness: 0.9),  // Purple
+            Color(hue: 0.7, saturation: 0.7, brightness: 0.9),  // Pink
+            Color(hue: 0.8, saturation: 0.7, brightness: 0.9),   // Cyan
+        ]
+    )
+
+    static let light = Theme(
+        nodeBackground: .white,
+        nodeBorder: Color(hex: "#CCCCCC"),
+        nodeTitle: .black,
+        nodeNotes: Color(hex: "#666666"),
+        connectorColors: dark.connectorColors  // Same hues, adjusted brightness
+    )
+}
+```
+
+### Custom Color Palettes
+
+```swift
+extension Theme {
+    static let palettes: [String: Theme] = [
+        "default": .dark,
+        "monochrome": monochromePalette,
+        "pastel": pastelPalette,
+        "vibrant": vibrantPalette
+    ]
+}
+```
+
+---
+
+## Appendix: Constraints Compliance Matrix
+
+| Constraint | Implementation | Section |
+|------------|---------------|---------|
+| HARD: Atomic file I/O + auto-backup | NSFileCoordinator + Timer.publish backup | §1, §7 |
+| HARD: Viewport culling, 60fps @ 10k nodes | R-tree spatial index, O(log n) queries | §2, §5 |
+| HARD: App Sandbox + NSFileProtectionComplete | NSDocument + Security-Scoped Bookmarks | §1, §7 |
+| HARD: @MainActor for SwiftData | @MainActor MindMapViewModel, ModelContext main-only | §3, §4 |
+| SOFT: Auto dark mode, 300ms transition | NSAnimationContext, @Environment colorScheme | §2, §4 |
+| SOFT: Debounce Cmd+N 500ms | Task debounce in MindMapViewModel | §3, §4 |
+| SOFT: Node text max 10,000 chars | Validation in NodeViewModel.updateTitle() | §3, §4 |
+| SOFT: Input sanitization for exports | MindMapExportable protocol sanitizes | §8 |
+
+---
+
+*Document generated for myMindMap v1.0.0*

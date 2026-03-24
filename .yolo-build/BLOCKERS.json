@@ -1,0 +1,431 @@
+{
+  "schema_version": "2.0",
+  "blockers": [
+    {
+      "id": "BLOCKER-001",
+      "severity": "FATAL",
+      "category": "structural",
+      "attack_vector": "SA-2",
+      "description": "Data persistence uses SwiftData ModelContext.save() with silent try? failure. No atomic write, no backup, no corruption detection. Crash mid-save = data loss with no recovery.",
+      "attack_scenario": "User editing 500-node mind map, system crashes mid-auto-save. SwiftData store left partially written. Relaunch shows corrupted data or empty store. No backup exists. All 500 nodes permanently lost.",
+      "owner": "senior_dev",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 0",
+      "resolved_by": "RedTeamA",
+      "resolution": "Implement: (1) Atomic write via FileManager.copyItem to temp then rename, (2) Auto-backup before every save to .backup directory, (3) SwiftData store integrity check on launch, (4) Recovery UI: 'Corrupted save found, restoring from backup', (5) Replace all try? with explicit try with error propagation to UI.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": "lead_architect",
+      "review_gate": "Gate 1.5",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "FATAL: No atomic writes, no backup, silent save failures"
+        },
+        {
+          "agent": "RedTeamA",
+          "action": "resolved",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Architecture survivable: resolution documented, FATAL addressed via Implement: (1) Atomic write via FileManager.copyIt..."
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Implement: (1) Atomic write via FileManager.copyItem to temp then rename, (2) Au..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-002",
+      "severity": "FATAL",
+      "category": "scalability",
+      "attack_vector": "SC-1",
+      "description": "No viewport culling. All nodes rendered regardless of visibility. At 1000+ nodes: O(n) render with ~1000 SwiftUI views + ~999 connections. At 10000+ nodes app becomes completely unresponsive.",
+      "attack_scenario": "User pastes brain-dump of 5000 nodes. App becomes unresponsive. Every pan/zoom triggers 5000 view updates. UI freezes 10+ seconds. User must force-quit and edit SQLite directly to recover.",
+      "owner": "senior_dev",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 0",
+      "resolved_by": "RedTeamA",
+      "resolution": "Implement: (1) Viewport culling - only NodeView for nodes intersecting visibleRect, (2) Spatial index (R-tree) for O(log n) viewport queries, (3) Connection culling - only draw connections with both endpoints visible, (4) Offscreen node placeholder views for non-visible nodes, (5) Target: 60fps with 10,000 nodes.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": "lead_architect",
+      "review_gate": "Gate 1.5",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "FATAL: No viewport culling, O(n) rendering, unusable at scale"
+        },
+        {
+          "agent": "RedTeamA",
+          "action": "resolved",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Architecture survivable: resolution documented, FATAL addressed via Implement: (1) Viewport culling - only NodeView fo..."
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Implement: (1) Viewport culling - only NodeView for nodes intersecting visibleRe..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-003",
+      "severity": "HIGH",
+      "category": "structural",
+      "attack_vector": "SA-1",
+      "description": "Keyboard navigation (arrow keys) has no breadcrumb trail, no depth indicator. Collapsed nodes silently skip entire subtrees during navigation. No navigation history.",
+      "attack_scenario": "User collapses 50-node branch, uses arrow keys. Navigation silently skips entire subtree. User believes they navigate to sibling when they reach distant cousin. Performs bulk operation on wrong subtree.",
+      "owner": "ux_engineer",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 0",
+      "resolved_by": "RedTeamA",
+      "resolution": "Implement: (1) Breadcrumb trail in status bar showing root\u2192...\u2192current path, (2) Navigation history with Cmd+[ back support, (3) Visual highlight of parent chain during navigation, (4) Audible feedback when crossing collapsed boundary.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": "lead_architect",
+      "review_gate": "Gate 1.5",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "HIGH: No breadcrumb, collapsed nodes silently skipped"
+        },
+        {
+          "agent": "RedTeamA",
+          "action": "resolved",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Architecture survivable: resolution documented, HIGH addressed via Implement: (1) Breadcrumb trail in status bar show..."
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Implement: (1) Breadcrumb trail in status bar showing root\u2192...\u2192current path, (2)..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-004",
+      "severity": "HIGH",
+      "category": "security",
+      "attack_vector": "SE-1",
+      "description": "SwiftData store at ~/Library/Application Support/myMindMap/ has world-readable permissions. No sandbox, no encryption, no NSFileProtection. Any local user/malware can read all mind map content.",
+      "attack_scenario": "Malware with current user privileges reads ~/Library/Application Support/myMindMap/ and extracts all mind map content including sensitive business data, personal notes, IP.",
+      "owner": "senior_dev",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 0",
+      "resolved_by": "RedTeamA",
+      "resolution": "Implement: (1) Enable App Sandbox with com.apple.security.files.user-selected.read-write, (2) NSFileProtectionComplete on SwiftData store, (3) Document expected file permissions (700), (4) Data Protection entitlement. Note: For document-based app, sandbox requires using Security-Scoped Bookmarks for file access.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": "lead_architect",
+      "review_gate": "Gate 1.5",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "HIGH: No sandbox, no encryption, world-readable store"
+        },
+        {
+          "agent": "RedTeamA",
+          "action": "resolved",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Architecture survivable: resolution documented, HIGH addressed via Implement: (1) Enable App Sandbox with com.apple.s..."
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Implement: (1) Enable App Sandbox with com.apple.security.files.user-selected.re..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-005",
+      "severity": "HIGH",
+      "category": "scalability",
+      "attack_vector": "SC-3",
+      "description": "SwiftData ModelContext is not thread-safe. modelContext stored as non-isolated property, used in save() from multiple contexts. Auto-save timer fires on background thread while user edits on main thread. Data races possible.",
+      "attack_scenario": "Auto-save fires on background thread while user edits node text on main thread. Both write to same MindMapNode. SwiftData throws CrossActorViolation. Data inconsistency. Possible crash with 'concurrent modification'.",
+      "owner": "senior_dev",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 0",
+      "resolved_by": "RedTeamA",
+      "resolution": "Implement: (1) Annotate all SwiftData operations @MainActor, (2) Use ModelContext only on main actor, (3) Move auto-save to main actor via Task { @MainActor in }, (4) Add actor-isolated wrapper for MindMapViewModel, (5) Test with -XactorIsolatedChecksStrict enabled.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": "lead_architect",
+      "review_gate": "Gate 1.5",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "HIGH: ModelContext not thread-safe, possible data races"
+        },
+        {
+          "agent": "RedTeamA",
+          "action": "resolved",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Architecture survivable: resolution documented, HIGH addressed via Implement: (1) Annotate all SwiftData operations @..."
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Implement: (1) Annotate all SwiftData operations @MainActor, (2) Use ModelContex..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-006",
+      "severity": "MEDIUM",
+      "category": "structural",
+      "attack_vector": "SA-3",
+      "description": "No SwiftData abstraction layer. If Apple deprecates/changes SwiftData, migration requires complete persistence rewrite with no defined path.",
+      "attack_scenario": "Apple announces SwiftData deprecation. No abstraction layer means complete rewrite of persistence layer. No migration test suite exists.",
+      "owner": "senior_dev",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 1.5",
+      "resolved_by": "RedTeamB",
+      "resolution": "Implement: Repository pattern abstraction (protocol MindMapRepository) over SwiftData. SwiftData implementation (MindMapRepositoryImpl) injected via Environment. Alternative (SQLite.swift) documented as fallback.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": null,
+      "review_gate": "Gate 2",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "MEDIUM: No dependency abstraction over SwiftData"
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Implement: Repository pattern abstraction (protocol MindMapRepository) over Swif..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-007",
+      "severity": "MEDIUM",
+      "category": "security",
+      "attack_vector": "SE-3",
+      "description": "User input in node text stored without sanitization. No length limits. Exported files (JSON/Markdown) could contain injection payloads. Extremely long node text could cause memory exhaustion.",
+      "attack_scenario": "Node text: '<script>alert(1)</script>' exported to JSON. Another user imports and renders without sanitization causing XSS. 100KB node text causes memory exhaustion.",
+      "owner": "senior_dev",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 1.5",
+      "resolved_by": "RedTeamB",
+      "resolution": "Implement: (1) Max 10,000 char limit on node text enforced at NodeViewModel, (2) Sanitize HTML/script content before export, (3) Escape all output in export formats, (4) Test with payloads: '<script>', '\\x00', unicode bidi.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": null,
+      "review_gate": "Gate 2",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "MEDIUM: No input sanitization, no length limits"
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Implement: (1) Max 10,000 char limit on node text enforced at NodeViewModel, (2)..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-008",
+      "severity": "MEDIUM",
+      "category": "ux",
+      "attack_vector": "UX-1",
+      "description": "Missing keyboard shortcuts for common operations: zoom 100%, collapse all, expand all, reset view, select all, copy/cut/paste nodes, toggle grid.",
+      "attack_scenario": "Power user with 200-node mind map must use mouse for node color changes, cannot collapse all with keyboard, cannot select all nodes to move together.",
+      "owner": "ux_engineer",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 1.5",
+      "resolved_by": "RedTeamB",
+      "resolution": "Implement missing shortcuts: Cmd+1 (zoom 100%), Cmd+Shift+C (collapse all), Cmd+Shift+E (expand all), Cmd+Shift+0 (reset view), Cmd+A (select all), Cmd+C/X/V (copy/cut/paste nodes). Document in Help menu shortcuts window (Cmd+?).",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": null,
+      "review_gate": "Gate 2",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "MEDIUM: Incomplete keyboard shortcut coverage"
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Implement missing shortcuts: Cmd+1 (zoom 100%), Cmd+Shift+C (collapse all), Cmd+..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-009",
+      "severity": "MEDIUM",
+      "category": "ux",
+      "attack_vector": "UX-2",
+      "description": "Dark mode is static toggle, not automatic. App does not observe NSApp.appearanceDidChangeNotification. Hardcoded hex colors don't adapt to macOS appearance.",
+      "attack_scenario": "User works in evening. macOS auto-switches to dark at 8PM. myMindMap stays light with harsh white background. User must manually toggle. Eye strain results.",
+      "owner": "ux_engineer",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 1.5",
+      "resolved_by": "RedTeamB",
+      "resolution": "Implement: (1) Observe NSApp.appearanceDidChangeNotification, (2) Auto-switch based on NSApp.effectiveAppearance, (3) Use dynamic colors: Color(nsColor: .windowBackgroundColor), (4) Animate transition over 300ms.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": null,
+      "review_gate": "Gate 2",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "MEDIUM: No automatic dark mode following macOS appearance"
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Implement: (1) Observe NSApp.appearanceDidChangeNotification, (2) Auto-switch ba..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-010",
+      "severity": "MEDIUM",
+      "category": "ux",
+      "attack_vector": "UX-3",
+      "description": "Vague acceptance criteria: 'beautiful', 'distraction-free', 'auto-sizing font' (no bounds), 'thin italics' (no pt size), 'colorful thin lines' (no hex), 'auto-zoom to fit' (no trigger/padding/animation), 'central node selected' (no visual spec).",
+      "attack_scenario": "Designer A implements 'beautiful' with neon colors and animations. Designer B implements 'distraction-free' with muted grays. QA cannot verify 'auto-zoom' because no one defined 'fit'.",
+      "owner": "ux_engineer",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 1.5",
+      "resolved_by": "RedTeamB",
+      "resolution": "Quantify in SPEC.md: (1) 'auto-sizing font' = 12pt min, 24pt max, depth 0=24pt, depth 1+=12-18pt by length, (2) 'thin italics' = 10pt SF Pro Italic, (3) 'colorful' = 8 distinct HSB hues, (4) 'thin lines' = 1.5pt stroke, (5) 'auto-zoom' = on new/open, 50pt padding, 300ms ease-in-out, (6) 'selected' = 2pt blue (#007AFF) ring.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": null,
+      "review_gate": "Gate 1",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "MEDIUM: Vague acceptance criteria need measurable definitions"
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Quantify in SPEC.md: (1) 'auto-sizing font' = 12pt min, 24pt max, depth 0=24pt, ..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-011",
+      "severity": "MEDIUM",
+      "category": "scalability",
+      "attack_vector": "SC-2",
+      "description": "No action throttling on Cmd+N. Each press synchronously triggers createNewMindMap() inserting into context and saving. Rapid 50x presses creates 50 MindMap objects with no debounce.",
+      "attack_scenario": "User holds Cmd+N accidentally. 50+ mind maps created. Must delete one by one. UI freezes briefly. SwiftData lock contention.",
+      "owner": "senior_dev",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 1.5",
+      "resolved_by": "RedTeamB",
+      "resolution": "Implement: (1) Debounce Cmd+N to max 1 action per 500ms, (2) Throttled action queue in MindMapViewModel, (3) Confirmation dialog if creating more than 3 mind maps in 5 seconds, (4) Limit max 10 unsaved documents in memory.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": null,
+      "review_gate": "Gate 2",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "MEDIUM: No action throttling on rapid Cmd+N"
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Implement: (1) Debounce Cmd+N to max 1 action per 500ms, (2) Throttled action qu..."
+        }
+      ],
+      "status": "RESOLVED"
+    },
+    {
+      "id": "BLOCKER-012",
+      "severity": "LOW",
+      "category": "security",
+      "attack_vector": "SE-2",
+      "description": "No network calls currently. Export menu stubs have no network code. Future cloud sync without certificate pinning, auth, or request signing would be vulnerable.",
+      "attack_scenario": "Developer adds cloud sync without security review. Attacker MITM to inject malicious content into sync stream.",
+      "owner": "senior_dev",
+      "phase_introduced": "Phase 0",
+      "gate_introduced": "Gate 0",
+      "gate_resolved": "Gate 1.5",
+      "resolved_by": "RedTeamB",
+      "resolution": "Document prohibition on network features until security review. If added: TLS pinning, OAuth 2.0, HMAC request signing, schema validation, network security config.",
+      "resolution_confirmed": true,
+      "proved_effective_signoff": null,
+      "review_gate": "Gate 3",
+      "reopened_count": 0,
+      "audit_trail": [
+        {
+          "agent": "RedTeamA",
+          "action": "filed",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "LOW: No network calls but future sync could be vulnerable"
+        },
+        {
+          "agent": "RedTeamB",
+          "action": "verified_implementation",
+          "timestamp": "2026-03-23T00:00:00Z",
+          "detail": "Confirmed: Document prohibition on network features until security review. If added: TLS pi..."
+        }
+      ],
+      "status": "RESOLVED"
+    }
+  ]
+}

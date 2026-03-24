@@ -2,6 +2,7 @@ import XCTest
 import SwiftUI
 @testable import myMindMap
 
+@MainActor
 final class CanvasViewModelTests: XCTestCase {
 
     var viewModel: CanvasViewModel!
@@ -102,7 +103,7 @@ final class CanvasViewModelTests: XCTestCase {
     }
 
     func testFitToScreenWithSingleNode() throws {
-        let node = MindMapNode(text: "Root", positionX: 0, positionY: 0)
+        let node = MindMapNode(title: "Root", positionX: 0, positionY: 0)
 
         viewModel.fitToScreen(nodes: [node], viewSize: CGSize(width: 800, height: 600))
 
@@ -111,9 +112,9 @@ final class CanvasViewModelTests: XCTestCase {
 
     func testFitToScreenWithMultipleNodes() throws {
         let nodes = [
-            MindMapNode(text: "Node1", positionX: 0, positionY: 0),
-            MindMapNode(text: "Node2", positionX: 200, positionY: 100),
-            MindMapNode(text: "Node3", positionX: 400, positionY: 200)
+            MindMapNode(title: "Node1", positionX: 0, positionY: 0),
+            MindMapNode(title: "Node2", positionX: 200, positionY: 100),
+            MindMapNode(title: "Node3", positionX: 400, positionY: 200)
         ]
 
         viewModel.fitToScreen(nodes: nodes, viewSize: CGSize(width: 800, height: 600))
@@ -155,9 +156,7 @@ final class CanvasViewModelTests: XCTestCase {
     }
 
     func testNodeAtPointReturnsNode() throws {
-        let node = MindMapNode(text: "Test", positionX: 100, positionY: 100)
-        node.width = 120
-        node.height = 40
+        let node = MindMapNode(title: "Test", positionX: 100, positionY: 100, depth: 1)
 
         let result = viewModel.nodeAt(point: CGPoint(x: 100, y: 100), nodes: [node])
 
@@ -166,9 +165,7 @@ final class CanvasViewModelTests: XCTestCase {
     }
 
     func testNodeAtPointReturnsNilForPointOutsideNode() throws {
-        let node = MindMapNode(text: "Test", positionX: 100, positionY: 100)
-        node.width = 100
-        node.height = 40
+        let node = MindMapNode(title: "Test", positionX: 100, positionY: 100, depth: 1)
 
         let result = viewModel.nodeAt(point: CGPoint(x: 500, y: 500), nodes: [node])
 

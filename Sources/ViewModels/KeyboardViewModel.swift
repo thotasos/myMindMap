@@ -2,17 +2,17 @@ import Foundation
 import SwiftUI
 
 @Observable
-class KeyboardViewModel {
+@MainActor
+final class KeyboardViewModel {
     var isCommandMode: Bool = false
     var lastKeyPress: String = ""
 
     func handleKeyPress(_ key: KeyEquivalent, modifiers: EventModifiers) -> Bool {
-        // Default key handling
         switch (key, modifiers) {
         // Navigation
         case (.tab, []):
             lastKeyPress = "Tab"
-            return false // Let the view handle it
+            return false
 
         case (.return, []):
             lastKeyPress = "Return"
@@ -79,6 +79,11 @@ class KeyboardViewModel {
             NotificationCenter.default.post(name: .fitToScreen, object: nil)
             return true
 
+        case ("1", .command):
+            lastKeyPress = "Cmd+1"
+            NotificationCenter.default.post(name: .zoomTo100, object: nil)
+            return true
+
         case ("=", .command), ("+", .command):
             lastKeyPress = "Cmd++"
             NotificationCenter.default.post(name: .zoomIn, object: nil)
@@ -89,6 +94,35 @@ class KeyboardViewModel {
             NotificationCenter.default.post(name: .zoomOut, object: nil)
             return true
 
+        case ("?", .command):
+            lastKeyPress = "Cmd+?"
+            NotificationCenter.default.post(name: .showShortcuts, object: nil)
+            return true
+
+        case (" ", []):
+            lastKeyPress = "Space"
+            return false
+
+        case ("[", .command):
+            lastKeyPress = "Cmd+["
+            NotificationCenter.default.post(name: .navigateBack, object: nil)
+            return true
+
+        case ("]", .command):
+            lastKeyPress = "Cmd+]"
+            NotificationCenter.default.post(name: .navigateForward, object: nil)
+            return true
+
+        case ("c", [.command, .shift]):
+            lastKeyPress = "Cmd+Shift+C"
+            NotificationCenter.default.post(name: .collapseAll, object: nil)
+            return true
+
+        case ("e", [.command, .shift]):
+            lastKeyPress = "Cmd+Shift+E"
+            NotificationCenter.default.post(name: .expandAll, object: nil)
+            return true
+
         default:
             lastKeyPress = "\(key)"
             return false
@@ -96,15 +130,4 @@ class KeyboardViewModel {
     }
 }
 
-// MARK: - Notification Names
-
-extension Notification.Name {
-    static let saveMindMap = Notification.Name("saveMindMap")
-    static let undoAction = Notification.Name("undoAction")
-    static let redoAction = Notification.Name("redoAction")
-    static let duplicateNode = Notification.Name("duplicateNode")
-    static let showSearch = Notification.Name("showSearch")
-    static let fitToScreen = Notification.Name("fitToScreen")
-    static let zoomIn = Notification.Name("zoomIn")
-    static let zoomOut = Notification.Name("zoomOut")
-}
+// Notification names are defined in NotificationNames.swift

@@ -82,6 +82,83 @@ struct ToolbarView: ToolbarContent {
                 Label("Toggle Grid", systemImage: canvasViewModel.showGrid ? "grid" : "grid.circle")
             }
             .help("Toggle Grid")
+
+            Divider()
+
+            Button(action: {
+                mindMapViewModel.toggleFullscreen()
+            }) {
+                Label("Toggle Fullscreen", systemImage: "arrow.up.left.and.arrow.down.right.circle")
+            }
+            .help("Toggle Fullscreen (Ctrl+Cmd+F)")
         }
+    }
+}
+
+// MARK: - Floating Toolbar
+
+struct FloatingToolbarView: View {
+    @Bindable var mindMapViewModel: MindMapViewModel
+    @Bindable var canvasViewModel: CanvasViewModel
+    @Bindable var nodeViewModel: NodeViewModel
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Add child
+            Button(action: {
+                guard let selectedId = canvasViewModel.selectedNodeIDs.first,
+                      let selectedNode = mindMapViewModel.currentMindMap?.nodes.first(where: { $0.id == selectedId }) else { return }
+                let newNode = nodeViewModel.addChildNode(to: selectedNode, in: mindMapViewModel.currentMindMap!)
+                mindMapViewModel.expandedNodeIds.insert(newNode.id)
+                canvasViewModel.selectNode(newNode.id)
+            }) {
+                Image(systemName: "plus.circle")
+            }
+            .help("Add Child (Tab)")
+
+            // Delete
+            Button(action: {
+                guard let selectedId = canvasViewModel.selectedNodeIDs.first,
+                      let selectedNode = mindMapViewModel.currentMindMap?.nodes.first(where: { $0.id == selectedId }) else { return }
+                nodeViewModel.deleteNode(selectedNode, in: mindMapViewModel.currentMindMap!)
+                canvasViewModel.clearSelection()
+            }) {
+                Image(systemName: "trash")
+            }
+            .help("Delete (Cmd+Backspace)")
+
+            Divider()
+                .frame(height: 20)
+
+            // Expand/Collapse
+            Button(action: {
+                guard let selectedId = canvasViewModel.selectedNodeIDs.first else { return }
+                mindMapViewModel.toggleNodeExpansion(selectedId)
+            }) {
+                Image(systemName: "chevron.down.square")
+            }
+            .help("Toggle Expand (Space)")
+
+            Divider()
+                .frame(height: 20)
+
+            // Zoom controls
+            Button(action: { canvasViewModel.zoomOut() }) {
+                Image(systemName: "minus.magnifyingglass")
+            }
+
+            Text("\(Int(canvasViewModel.scale * 100))%")
+                .font(.caption)
+                .frame(width: 45)
+
+            Button(action: { canvasViewModel.zoomIn() }) {
+                Image(systemName: "plus.magnifyingglass")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .shadow(radius: 5)
     }
 }

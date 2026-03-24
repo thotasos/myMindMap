@@ -2,24 +2,25 @@ import Foundation
 import SwiftUI
 
 @Observable
-class CanvasViewModel {
-    // Viewport state
+@MainActor
+final class CanvasViewModel {
+    // MARK: - Viewport State
     var scale: CGFloat = 1.0
     var offset: CGPoint = .zero
     var canvasSize: CGSize = .zero
 
-    // Selection state
+    // MARK: - Selection State
     var selectedNodeIDs: Set<UUID> = []
     var focusedNodeID: UUID?
 
-    // Canvas settings
+    // MARK: - Canvas Settings
     var showGrid: Bool = true
     var gridSpacing: CGFloat = 20
 
-    // Animation
+    // MARK: - Animation
     var animationDuration: Double = 0.3
 
-    // Limits
+    // MARK: - Limits
     let minScale: CGFloat = 0.1
     let maxScale: CGFloat = 3.0
 
@@ -36,13 +37,19 @@ class CanvasViewModel {
 
     func zoomIn() {
         withAnimation(.easeInOut(duration: animationDuration)) {
-            scale = min(scale * 1.2, maxScale)
+            scale = min(scale * 1.25, maxScale)
         }
     }
 
     func zoomOut() {
         withAnimation(.easeInOut(duration: animationDuration)) {
-            scale = max(scale / 1.2, minScale)
+            scale = max(scale / 1.25, minScale)
+        }
+    }
+
+    func zoomTo100() {
+        withAnimation(.easeInOut(duration: animationDuration)) {
+            scale = 1.0
         }
     }
 
@@ -57,10 +64,10 @@ class CanvasViewModel {
         var maxY = -Double.greatestFiniteMagnitude
 
         for node in nodes {
-            minX = min(minX, node.positionX - node.width / 2)
-            minY = min(minY, node.positionY - node.height / 2)
-            maxX = max(maxX, node.positionX + node.width / 2)
-            maxY = max(maxY, node.positionY + node.height / 2)
+            minX = min(minX, node.positionX - 60)
+            minY = min(minY, node.positionY - 30)
+            maxX = max(maxX, node.positionX + 60)
+            maxY = max(maxY, node.positionY + 30)
         }
 
         let contentWidth = maxX - minX + padding * 2

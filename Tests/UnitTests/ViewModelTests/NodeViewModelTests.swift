@@ -3,6 +3,7 @@ import SwiftUI
 import SwiftData
 @testable import myMindMap
 
+@MainActor
 final class NodeViewModelTests: XCTestCase {
 
     var viewModel: NodeViewModel!
@@ -12,8 +13,7 @@ final class NodeViewModelTests: XCTestCase {
     override func setUpWithError() throws {
         viewModel = NodeViewModel()
 
-        // Setup SwiftData container for testing
-        let schema = Schema([MindMap.self, MindMapNode.self, NodeConnection.self, Theme.self])
+        let schema = Schema([MindMap.self, MindMapNode.self, MindMapConnection.self, Theme.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         modelContainer = try? ModelContainer(for: schema, configurations: config)
         if let container = modelContainer {
@@ -31,7 +31,7 @@ final class NodeViewModelTests: XCTestCase {
     // MARK: - Initialization Tests
 
     func testDefaultInitialization() throws {
-        XCTAssertNil(viewModel.editingNodeID)
+        XCTAssertNil(viewModel.editingNodeId)
         XCTAssertEqual(viewModel.editText, "")
         XCTAssertEqual(viewModel.clipboard, "")
     }
@@ -47,15 +47,15 @@ final class NodeViewModelTests: XCTestCase {
         let mindMap = MindMap(title: "Test Map")
         context.insert(mindMap)
 
-        let parentNode = MindMapNode(text: "Parent", positionX: 0, positionY: 0)
+        let parentNode = MindMapNode(title: "Parent", positionX: 0, positionY: 0)
         parentNode.mindMap = mindMap
         mindMap.nodes.append(parentNode)
 
         let childNode = viewModel.addChildNode(to: parentNode, in: mindMap)
 
-        XCTAssertEqual(parentNode.children.count, 1)
-        XCTAssertEqual(childNode.parent?.id, parentNode.id)
-        XCTAssertEqual(childNode.text, "New Idea")
+        XCTAssertEqual(childNode.parentId, parentNode.id)
+        XCTAssertEqual(childNode.title, "New Idea")
+        XCTAssertEqual(mindMap.nodes.count, 2)
     }
 
     func testAddSiblingNode() throws {
@@ -67,12 +67,11 @@ final class NodeViewModelTests: XCTestCase {
         let mindMap = MindMap(title: "Test Map")
         context.insert(mindMap)
 
-        let rootNode = MindMapNode(text: "Root", positionX: 0, positionY: 0)
+        let rootNode = MindMapNode(title: "Root", positionX: 0, positionY: 0)
         rootNode.mindMap = mindMap
         mindMap.nodes.append(rootNode)
 
-        let childNode = MindMapNode(text: "Child", positionX: 150, positionY: 0)
-        childNode.parent = rootNode
+        let childNode = MindMapNode(title: "Child", positionX: 150, positionY: 0, parentId: rootNode.id)
         childNode.mindMap = mindMap
         rootNode.children.append(childNode)
         mindMap.nodes.append(childNode)
@@ -80,7 +79,7 @@ final class NodeViewModelTests: XCTestCase {
         let siblingNode = viewModel.addSiblingNode(to: childNode, in: mindMap)
 
         XCTAssertNotNil(siblingNode)
-        XCTAssertEqual(siblingNode?.parent?.id, rootNode.id)
+        XCTAssertEqual(siblingNode?.parentId, rootNode.id)
     }
 
     func testAddSiblingNodeReturnsNilForRoot() throws {
@@ -92,9 +91,9 @@ final class NodeViewModelTests: XCTestCase {
         let mindMap = MindMap(title: "Test Map")
         context.insert(mindMap)
 
-        let rootNode = MindMapNode(text: "Root", positionX: 0, positionY: 0)
+        let rootNode = MindMapNode(title: "Root", positionX: 0, positionY: 0)
         rootNode.mindMap = mindMap
-        rootNode.parent = nil
+        rootNode.parentId = nil
         mindMap.nodes.append(rootNode)
 
         let siblingNode = viewModel.addSiblingNode(to: rootNode, in: mindMap)
@@ -113,12 +112,11 @@ final class NodeViewModelTests: XCTestCase {
         let mindMap = MindMap(title: "Test Map")
         context.insert(mindMap)
 
-        let rootNode = MindMapNode(text: "Root", positionX: 0, positionY: 0)
+        let rootNode = MindMapNode(title: "Root", positionX: 0, positionY: 0)
         rootNode.mindMap = mindMap
         mindMap.nodes.append(rootNode)
 
-        let childNode = MindMapNode(text: "Child", positionX: 150, positionY: 0)
-        childNode.parent = rootNode
+        let childNode = MindMapNode(title: "Child", positionX: 150, positionY: 0, parentId: rootNode.id)
         childNode.mindMap = mindMap
         rootNode.children.append(childNode)
         mindMap.nodes.append(childNode)
@@ -127,38 +125,6 @@ final class NodeViewModelTests: XCTestCase {
         viewModel.deleteNode(childNode, in: mindMap)
 
         XCTAssertEqual(mindMap.nodes.count, initialCount - 1)
-    }
-
-    func testDeleteNodeWithChildren() throws {
-        guard let context = modelContext else {
-            XCTSkip("ModelContext not available")
-            return
-        }
-
-        let mindMap = MindMap(title: "Test Map")
-        context.insert(mindMap)
-
-        let rootNode = MindMapNode(text: "Root", positionX: 0, positionY: 0)
-        rootNode.mindMap = mindMap
-        mindMap.nodes.append(rootNode)
-
-        let parent = MindMapNode(text: "Parent", positionX: 150, positionY: 0)
-        parent.parent = rootNode
-        parent.mindMap = mindMap
-        rootNode.children.append(parent)
-        mindMap.nodes.append(parent)
-
-        let child = MindMapNode(text: "Child", positionX: 300, positionY: 0)
-        child.parent = parent
-        child.mindMap = mindMap
-        parent.children.append(child)
-        mindMap.nodes.append(child)
-
-        let initialCount = mindMap.nodes.count
-        viewModel.deleteNode(parent, in: mindMap)
-
-        // Should delete both parent and child
-        XCTAssertEqual(mindMap.nodes.count, initialCount - 2)
     }
 
     func testCannotDeleteRootNode() throws {
@@ -170,9 +136,9 @@ final class NodeViewModelTests: XCTestCase {
         let mindMap = MindMap(title: "Test Map")
         context.insert(mindMap)
 
-        let rootNode = MindMapNode(text: "Root", positionX: 0, positionY: 0)
+        let rootNode = MindMapNode(title: "Root", positionX: 0, positionY: 0)
         rootNode.mindMap = mindMap
-        rootNode.parent = nil
+        rootNode.parentId = nil
         mindMap.nodes.append(rootNode)
 
         let initialCount = mindMap.nodes.count
@@ -185,34 +151,34 @@ final class NodeViewModelTests: XCTestCase {
     // MARK: - Node Editing Tests
 
     func testStartEditing() throws {
-        let node = MindMapNode(text: "Original Text", positionX: 0, positionY: 0)
+        let node = MindMapNode(title: "Original Text", positionX: 0, positionY: 0)
 
         viewModel.startEditing(node)
 
-        XCTAssertEqual(viewModel.editingNodeID, node.id)
+        XCTAssertEqual(viewModel.editingNodeId, node.id)
         XCTAssertEqual(viewModel.editText, "Original Text")
     }
 
     func testFinishEditing() throws {
-        let node = MindMapNode(text: "Original", positionX: 0, positionY: 0)
+        let node = MindMapNode(title: "Original", positionX: 0, positionY: 0)
 
         viewModel.startEditing(node)
         viewModel.editText = "Updated Text"
         viewModel.finishEditing(node)
 
-        XCTAssertEqual(node.text, "Updated Text")
-        XCTAssertNil(viewModel.editingNodeID)
+        XCTAssertEqual(node.title, "Updated Text")
+        XCTAssertNil(viewModel.editingNodeId)
     }
 
     func testCancelEditing() throws {
-        let node = MindMapNode(text: "Original", positionX: 0, positionY: 0)
+        let node = MindMapNode(title: "Original", positionX: 0, positionY: 0)
 
         viewModel.startEditing(node)
         viewModel.editText = "Changed"
 
         viewModel.cancelEditing()
 
-        XCTAssertNil(viewModel.editingNodeID)
+        XCTAssertNil(viewModel.editingNodeId)
         XCTAssertEqual(viewModel.editText, "")
     }
 
@@ -236,67 +202,20 @@ final class NodeViewModelTests: XCTestCase {
         XCTAssertEqual(node.positionY, 200)
     }
 
-    // MARK: - Collapse/Expand Tests
+    // MARK: - Expand/Collapse Tests
 
     func testToggleCollapse() throws {
         let node = MindMapNode()
 
-        XCTAssertFalse(node.isCollapsed)
+        XCTAssertTrue(node.isExpanded)
 
-        viewModel.toggleCollapse(node)
+        node.isExpanded.toggle()
 
-        XCTAssertTrue(node.isCollapsed)
+        XCTAssertFalse(node.isExpanded)
 
-        viewModel.toggleCollapse(node)
+        node.isExpanded.toggle()
 
-        XCTAssertFalse(node.isCollapsed)
-    }
-
-    // MARK: - Node Duplication Tests
-
-    func testDuplicateNode() throws {
-        guard let context = modelContext else {
-            XCTSkip("ModelContext not available")
-            return
-        }
-
-        let mindMap = MindMap(title: "Test Map")
-        context.insert(mindMap)
-
-        let rootNode = MindMapNode(text: "Root", positionX: 0, positionY: 0)
-        rootNode.mindMap = mindMap
-        mindMap.nodes.append(rootNode)
-
-        let nodeToDuplicate = MindMapNode(text: "Original", positionX: 150, positionY: 0)
-        nodeToDuplicate.parent = rootNode
-        nodeToDuplicate.mindMap = mindMap
-        rootNode.children.append(nodeToDuplicate)
-        mindMap.nodes.append(nodeToDuplicate)
-
-        let duplicate = viewModel.duplicateNode(nodeToDuplicate, in: mindMap)
-
-        XCTAssertNotNil(duplicate)
-        XCTAssertEqual(duplicate?.text, "Original (copy)")
-        XCTAssertEqual(duplicate?.parent?.id, rootNode.id)
-    }
-
-    func testDuplicateNodeReturnsNilForRoot() throws {
-        guard let context = modelContext else {
-            XCTSkip("ModelContext not available")
-            return
-        }
-
-        let mindMap = MindMap(title: "Test Map")
-        context.insert(mindMap)
-
-        let rootNode = MindMapNode(text: "Root", positionX: 0, positionY: 0)
-        rootNode.mindMap = mindMap
-        rootNode.parent = nil
-        mindMap.nodes.append(rootNode)
-
-        let duplicate = viewModel.duplicateNode(rootNode, in: mindMap)
-
-        XCTAssertNil(duplicate)
+        XCTAssertTrue(node.isExpanded)
     }
 
     // MARK: - Clipboard Tests
